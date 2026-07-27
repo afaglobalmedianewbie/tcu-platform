@@ -1,0 +1,481 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("STAGING_DATABASE_URL")
+}
+
+// =============================================================================
+// ENUMS (Phase 1)
+// =============================================================================
+
+enum AuthProvider {
+  LOCAL
+  KEYCLOAK
+  GOOGLE
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+enum CustomerStatus {
+  PROSPECT
+  ACTIVE
+  ISOLATED
+  SUSPENDED
+  TERMINATED
+}
+
+enum ServiceStatus {
+  PENDING_INSTALLATION
+  ACTIVE
+  SUSPENDED
+  TERMINATED
+}
+
+enum PackageType {
+  FTTH
+  WIRELESS
+  DEDICATED
+  HOSTED
+}
+
+enum PackageStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  OVERDUE
+  PARTIAL
+  CANCELLED
+  WAIVED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+  EXPIRED
+}
+
+enum PaymentType {
+  CASH
+  BANK_TRANSFER
+  VIRTUAL_ACCOUNT
+  QRIS
+  EWALLET
+  XENDIT
+  MIDTRANS
+  OTHER
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  WAITING_PARTS
+  ESCALATED
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketCategory {
+  INTERNET_DOWN
+  SLOW_SPEED
+  INTERMITTENT
+  BILLING_DISPUTE
+  INSTALLATION_REQUEST
+  UPGRADE_DOWNGRADE
+  RELOCATION
+  DEVICE_ISSUE
+  PERTANYAAN_UMUM
+  OTHER
+}
+
+
+// =============================================================================
+// MODULE 01 — AUTH / RBAC
+// =============================================================================
+
+model User {
+  id               String       @id @default(uuid()) @db.Uuid
+  email            String       @unique @db.VarChar(255)
+  username         String?      @unique @db.VarChar(64)
+  phone            String?      @unique @db.VarChar(20)
+  fullName         String       @db.VarChar(255)
+  avatarUrl        String?
+  provider         AuthProvider @default(LOCAL)
+  passwordHash     String?
+  keycloakId       String?      @unique @db.VarChar(255)
+  totpSecret       String?
+  totpEnabled      Boolean      @default(false)
+  status           UserStatus   @default(ACTIVE)
+  lastLoginAt      DateTime?
+  preferences      Json?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  roles            UserRole[]
+  auditLogs        AuditLog[]
+  customer         Customer?
+  assignedTickets  Ticket[]     @relation("TicketAssignee")
+  ticketComments   TicketComment[]
+
+  @@index([email])
+  @@index([username])
+  @@index([status])
+  @@index([provider])
+  @@map("users")
+}
+
+model Role {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @unique @db.VarChar(64)
+  description String?
+  isSystem    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  userRoles   UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String    @id @default(uuid()) @db.Uuid
+  action      String    @unique @db.VarChar(128)
+  module      String    @db.VarChar(64)
+  description String?
+
+  roles       RolePermission[]
+
+  @@index([module])
+  @@map("permissions")
+}
+
+model UserRole {
+  userId      String    @db.Uuid
+  roleId      String    @db.Uuid
+  grantedAt   DateTime  @default(now())
+  grantedBy   String?   @db.Uuid
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String    @db.Uuid
+  permissionId String    @db.Uuid
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Restrict)
+
+  @@id([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model AuditLog {
+  id            BigInt    @id @default(autoincrement())
+  userId        String?   @db.Uuid
+  entityType    String?   @db.VarChar(64)
+  entityId      String?   @db.VarChar(128)
+  action        String    @db.VarChar(255)
+  module        String?   @db.VarChar(64)
+  previousState Json?
+  newState      Json?
+  payload       Json?
+  ipAddress     String?   @db.VarChar(45)
+  userAgent     String?   @db.VarChar(512)
+  createdAt     DateTime  @default(now())
+
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+// =============================================================================
+// MODULE 03 — CUSTOMERS
+// =============================================================================
+
+model Customer {
+  id             String         @id @default(uuid()) @db.Uuid
+  customerCode   String         @unique @db.VarChar(32)
+  userId         String         @unique @db.Uuid
+  user           User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  fullName       String         @db.VarChar(255)
+  identityNumber String?        @db.VarChar(20)
+  phone          String?        @db.VarChar(20)
+  email          String?        @db.VarChar(255)
+  status         CustomerStatus @default(PROSPECT)
+  referralCode   String?        @db.VarChar(32)
+  referredById   String?        @db.Uuid
+  joinedAt       DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  addresses      CustomerAddress[]
+  contacts       CustomerContact[]
+  services       CustomerService[]
+  invoices       Invoice[]
+  payments       Payment[]
+  tickets        Ticket[]
+
+  @@index([status])
+  @@index([customerCode])
+  @@map("customers")
+}
+
+model CustomerAddress {
+  id          String    @id @default(uuid()) @db.Uuid
+  customerId  String    @db.Uuid
+  label       String    @db.VarChar(64)
+  isPrimary   Boolean   @default(false)
+  street      String
+  rt          String?   @db.VarChar(8)
+  rw          String?   @db.VarChar(8)
+  kelurahan   String?   @db.VarChar(128)
+  kecamatan   String?   @db.VarChar(128)
+  kota        String?   @db.VarChar(128)
+  province    String?   @db.VarChar(128)
+  postalCode  String?   @db.VarChar(10)
+  latitude    Decimal?  @db.Decimal(10, 8)
+  longitude   Decimal?  @db.Decimal(11, 8)
+  mapsUrl     String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("customer_addresses")
+}
+
+model CustomerContact {
+  id           String    @id @default(uuid()) @db.Uuid
+  customerId   String    @db.Uuid
+  name         String    @db.VarChar(255)
+  relationship String?   @db.VarChar(64)
+  phone        String    @db.VarChar(20)
+  email        String?   @db.VarChar(255)
+  isPrimary    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  customer     Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("customer_contacts")
+}
+
+model CustomerService {
+  id               String        @id @default(uuid()) @db.Uuid
+  customerId       String        @db.Uuid
+  packageId        String        @db.Uuid
+  status           ServiceStatus @default(PENDING_INSTALLATION)
+  pppoeUsername    String?       @unique @db.VarChar(64)
+  staticIp         String?       @db.VarChar(15)
+  activationDate   DateTime?
+  nextBillingDate  DateTime?
+  terminationDate  DateTime?
+  terminationReason String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  customer         Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  package          ServicePackage @relation(fields: [packageId], references: [id])
+  invoices         Invoice[]
+
+  @@index([customerId])
+  @@index([packageId])
+  @@index([status])
+  @@map("customer_services")
+}
+
+// =============================================================================
+// MODULE 04 — PACKAGES
+// =============================================================================
+
+model ServicePackage {
+  id               String        @id @default(uuid()) @db.Uuid
+  name             String        @db.VarChar(128)
+  type             PackageType   @default(FTTH)
+  status           PackageStatus @default(ACTIVE)
+  downloadMbps     Int
+  uploadMbps       Int           @default(0)
+  hasFup           Boolean       @default(false)
+  fupLimitGb       Int?
+  monthlyPrice     Decimal       @db.Decimal(12, 2)
+  setupFee         Decimal       @db.Decimal(12, 2) @default(0)
+  billingCycleDays Int           @default(30)
+  mikrotikProfile  String?       @db.VarChar(64)
+  features         String[]
+  isPopular        Boolean       @default(false)
+  sortOrder        Int           @default(0)
+  validFrom        DateTime?
+  validUntil       DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  services         CustomerService[]
+
+  @@index([status])
+  @@index([type])
+  @@map("service_packages")
+}
+
+// =============================================================================
+// MODULE 05 — BILLING
+// =============================================================================
+
+model Invoice {
+  id              String        @id @default(uuid()) @db.Uuid
+  invoiceNumber   String        @unique @db.VarChar(32)
+  customerId      String        @db.Uuid
+  serviceId       String?       @db.Uuid
+  period          String        @db.VarChar(32)
+  issueDate       DateTime      @default(now())
+  dueDate         DateTime
+  paidAt          DateTime?
+  subtotal        Decimal       @db.Decimal(12, 2)
+  taxRate         Decimal       @db.Decimal(5, 4)  @default(0)
+  taxAmount       Decimal       @db.Decimal(12, 2) @default(0)
+  totalAmount     Decimal       @db.Decimal(12, 2)
+  status          InvoiceStatus @default(DRAFT)
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  customer        Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  service         CustomerService? @relation(fields: [serviceId], references: [id])
+  items           InvoiceItem[]
+  payments        Payment[]
+
+  @@index([customerId])
+  @@index([serviceId])
+  @@index([status, dueDate])
+  @@index([period])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String    @id @default(uuid()) @db.Uuid
+  invoiceId   String    @db.Uuid
+  description String    @db.VarChar(255)
+  quantity    Int       @default(1)
+  unitPrice   Decimal   @db.Decimal(12, 2)
+  totalPrice  Decimal   @db.Decimal(12, 2)
+  sortOrder   Int       @default(0)
+
+  invoice     Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
+
+model Payment {
+  id               String        @id @default(uuid()) @db.Uuid
+  invoiceId        String        @db.Uuid
+  customerId       String        @db.Uuid
+  amount           Decimal       @db.Decimal(12, 2)
+  status           PaymentStatus @default(PENDING)
+  referenceNumber  String?       @db.VarChar(255)
+  paymentUrl       String?
+  gatewayResponse  Json?
+  paidAt           DateTime?
+  expiresAt        DateTime?
+  notes            String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  invoice          Invoice         @relation(fields: [invoiceId], references: [id])
+  customer         Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([invoiceId])
+  @@index([customerId])
+  @@index([status])
+  @@index([referenceNumber])
+  @@map("payments")
+}
+
+// =============================================================================
+// MODULE 06 — TICKETING
+// =============================================================================
+
+model Ticket {
+  id               String         @id @default(uuid()) @db.Uuid
+  ticketNumber     String         @unique @db.VarChar(32)
+  customerId       String         @db.Uuid
+  assigneeId       String?        @db.Uuid
+  subject          String         @db.VarChar(255)
+  description      String?
+  category         TicketCategory @default(INTERNET_DOWN)
+  priority         TicketPriority @default(MEDIUM)
+  status           TicketStatus   @default(OPEN)
+  slaDeadline      DateTime?
+  firstResponseAt  DateTime?
+  resolvedAt       DateTime?
+  closedAt         DateTime?
+  resolutionNote   String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  customer         Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  assignee         User?          @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  comments         TicketComment[]
+
+  @@index([customerId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+  @@map("tickets")
+}
+
+model TicketComment {
+  id          String    @id @default(uuid()) @db.Uuid
+  ticketId    String    @db.Uuid
+  authorId    String    @db.Uuid
+  isInternal  Boolean   @default(false)
+  isStaff     Boolean   @default(false)
+  body        String
+  editedAt    DateTime?
+  createdAt   DateTime  @default(now())
+
+  ticket      Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author      User      @relation(fields: [authorId], references: [id])
+
+  @@index([ticketId])
+  @@index([authorId])
+  @@map("ticket_comments")
+}

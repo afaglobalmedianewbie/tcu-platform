@@ -1,0 +1,89 @@
+{
+  "id": "tcu-platform",
+  "realm": "tcu-platform",
+  "displayName": "TCU Platform",
+  "enabled": true,
+  "roles": {
+    "realm": [
+      { "name": "super_admin", "description": "Super Administrator" },
+      { "name": "owner", "description": "Company Owner" },
+      { "name": "admin", "description": "System Administrator" },
+      { "name": "finance", "description": "Finance and Billing" },
+      { "name": "sales", "description": "Sales and CRM" },
+      { "name": "helpdesk", "description": "Customer Support Helpdesk" },
+      { "name": "noc", "description": "Network Operations Center" },
+      { "name": "technician", "description": "Field Technician" },
+      { "name": "viewer", "description": "Read-only Viewer" },
+      { "name": "customer", "description": "End Customer" }
+    ]
+  },
+  "groups": [
+    { "name": "internal-admin", "realmRoles": ["super_admin", "owner", "admin"] },
+    { "name": "finance-team", "realmRoles": ["finance"] },
+    { "name": "sales-team", "realmRoles": ["sales"] },
+    { "name": "helpdesk-team", "realmRoles": ["helpdesk"] },
+    { "name": "noc-team", "realmRoles": ["noc"] },
+    { "name": "technician-team", "realmRoles": ["technician"] },
+    { "name": "customers", "realmRoles": ["customer"] }
+  ],
+  "clients": [
+    {
+      "clientId": "tcu-admin-portal",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "https://admin.topclass.id/*",
+        "http://localhost:3001/*"
+      ],
+      "webOrigins": [
+        "https://admin.topclass.id",
+        "http://localhost:3001"
+      ],
+      "protocol": "openid-connect"
+    },
+    {
+      "clientId": "tcu-customer-portal",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "https://customer.topclass.id/*",
+        "http://localhost:3002/*"
+      ],
+      "webOrigins": [
+        "https://customer.topclass.id",
+        "http://localhost:3002"
+      ],
+      "protocol": "openid-connect"
+    },
+    {
+      "clientId": "tcu-technician-app",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "https://tech.topclass.id/*",
+        "http://localhost:3003/*"
+      ],
+      "webOrigins": [
+        "https://tech.topclass.id",
+        "http://localhost:3003"
+      ],
+      "protocol": "openid-connect"
+    },
+    {
+      "clientId": "tcu-api",
+      "enabled": true,
+      "bearerOnly": true,
+      "publicClient": false,
+      "protocol": "openid-connect"
+    }
+  ]
+}

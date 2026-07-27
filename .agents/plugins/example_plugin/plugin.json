@@ -1,0 +1,12 @@
+{
+  "name": "example-plugin",
+  "version": "1.0.0",
+  "description": "An example plugin that bundles skills, rules, and MCP servers into a single unit.",
+  "skills": [
+    "example-skill"
+  ],
+  "rules": [
+    "example-rule"
+  ],
+  "mcpServers": {}
+}

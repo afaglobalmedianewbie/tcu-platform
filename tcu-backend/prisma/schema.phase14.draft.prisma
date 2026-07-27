@@ -1,0 +1,502 @@
+// /home/tcu/tcu-backend/prisma/schema.phase14.draft.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------
+// Auth & User Management + RBAC
+// ----------------------------------------------------
+
+model User {
+  id               String           @id @default(uuid())
+  email            String           @unique
+  phone            String?          @unique
+  password_hash    String
+  role             String
+  username         String?          @unique
+  full_name        String?
+  address          String?
+  twoFactorEnabled Boolean          @default(false)
+  twoFactorSecret  String?
+  profile_picture  String?
+  preferences      Json?
+  created_at       DateTime         @default(now())
+  updated_at       DateTime         @updatedAt
+  deletedAt        DateTime?
+
+  customerProfile  CustomerProfile?
+  loginLogs        LoginLog[]
+  auditLogs        AuditLog[]
+  workOrders       WorkOrder[]      @relation("TechnicianWorkOrders")
+  
+  userRoles        UserRole[]
+  assignedTickets  Ticket[]         @relation("TicketAssignee")
+  ticketComments   TicketComment[]
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  created_at  DateTime         @default(now())
+  updated_at  DateTime         @updatedAt
+  
+  permissions RolePermission[]
+  users       UserRole[]
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  name        String           @unique 
+  description String?
+  created_at  DateTime         @default(now())
+  
+  roles       RolePermission[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+model LoginLog {
+  id         BigInt   @id @default(autoincrement())
+  userId     String
+  ip_address String?
+  created_at DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+// ----------------------------------------------------
+// Customer
+// ----------------------------------------------------
+
+model CustomerProfile {
+  id                 String            @id @default(uuid())
+  user_id            String            @unique
+  customer_id_string String            @unique
+  full_name          String
+  address            String?
+  email              String?
+  phone              String?
+  status             String            @default("INSTALLATION")
+  planId             Int?
+  pppoe_username     String?           @unique
+  pppoe_password     String?
+  created_at         DateTime          @default(now())
+  updated_at         DateTime          @updatedAt
+  deletedAt          DateTime?
+
+  user               User              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  plan               SubscriptionPlan? @relation(fields: [planId], references: [id])
+  invoices           Invoice[]
+  tickets            Ticket[]
+  workOrders         WorkOrder[]       @relation("CustomerWorkOrders")
+  
+  addresses          CustomerAddress[]
+  contacts           CustomerContact[]
+  documents          CustomerDocument[]
+  services           CustomerService[]
+}
+
+model CustomerAddress {
+  id              String          @id @default(uuid())
+  customerId      String
+  type            String          @default("BILLING")
+  addressLine1    String
+  addressLine2    String?
+  city            String?
+  state           String?
+  postalCode      String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  customer        CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  @@index([customerId])
+}
+
+model CustomerContact {
+  id              String          @id @default(uuid())
+  customerId      String
+  name            String
+  phone           String
+  email           String?
+  relation        String?
+  isPrimary       Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  customer        CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  @@index([customerId])
+}
+
+model CustomerDocument {
+  id              String          @id @default(uuid())
+  customerId      String
+  type            String
+  fileUrl         String
+  createdAt       DateTime        @default(now())
+
+  customer        CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  @@index([customerId])
+}
+
+model CustomerService {
+  id              String          @id @default(uuid())
+  customerId      String
+  packageId       Int
+  status          String          @default("ACTIVE")
+  activationDate  DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  customer        CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  package         SubscriptionPlan @relation(fields: [packageId], references: [id])
+  @@index([customerId])
+  @@index([packageId])
+}
+
+// ----------------------------------------------------
+// Internet Plans
+// ----------------------------------------------------
+
+model SubscriptionPlan {
+  id               Int               @id @default(autoincrement())
+  name             String
+  speed_mbps       Int
+  price            Decimal           @db.Decimal(12, 2)
+  mikrotik_profile String?
+  features         String[]
+  popular          Boolean           @default(false)
+  isActive         Boolean           @default(true)
+  created_at       DateTime          @default(now())
+  deletedAt        DateTime?
+
+  customers        CustomerProfile[]
+  customerServices CustomerService[]
+  addons           ServiceAddon[]
+}
+
+model ServiceAddon {
+  id          String           @id @default(uuid())
+  packageId   Int
+  name        String
+  price       Decimal          @db.Decimal(12, 2)
+  createdAt   DateTime         @default(now())
+
+  package     SubscriptionPlan @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  @@index([packageId])
+}
+
+// ----------------------------------------------------
+// Billing
+// ----------------------------------------------------
+
+model Invoice {
+  id               String          @id @default(uuid())
+  customerId       String
+  period           String
+  amount           Decimal         @db.Decimal(12, 2)
+  due_date         DateTime
+  status           String          @default("UNPAID")
+  payment_method   String?
+  paid_at          DateTime?
+  adjustment       Decimal?        @db.Decimal(12, 2)
+  adjustmentReason String?
+  created_at       DateTime        @default(now())
+  deletedAt        DateTime?
+
+  customer         CustomerProfile @relation(fields: [customerId], references: [id])
+  items            InvoiceItem[]
+  payments         Payment[]
+  @@index([customerId])
+}
+
+model InvoiceItem {
+  id          String  @id @default(uuid())
+  invoiceId   String
+  description String
+  amount      Decimal @db.Decimal(12, 2)
+
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  @@index([invoiceId])
+}
+
+model PaymentMethod {
+  id          String    @id @default(uuid())
+  code        String    @unique
+  name        String
+  isActive    Boolean   @default(true)
+  payments    Payment[]
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  invoiceId       String
+  paymentMethodId String
+  amount          Decimal       @db.Decimal(12, 2)
+  status          String        @default("PENDING")
+  paymentDate     DateTime?
+  createdAt       DateTime      @default(now())
+
+  invoice         Invoice       @relation(fields: [invoiceId], references: [id])
+  method          PaymentMethod @relation(fields: [paymentMethodId], references: [id])
+  logs            PaymentLog[]
+  
+  @@index([invoiceId])
+  @@index([paymentMethodId])
+}
+
+model PaymentLog {
+  id         String   @id @default(uuid())
+  paymentId  String
+  action     String
+  reason     String?
+  createdAt  DateTime @default(now())
+
+  payment    Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  @@index([paymentId])
+}
+
+// ----------------------------------------------------
+// Support Tickets
+// ----------------------------------------------------
+
+model Ticket {
+  id          String          @id @default(uuid())
+  customerId  String
+  assigneeId  String?
+  subject     String
+  description String
+  priority    String          @default("MEDIUM")
+  status      String          @default("OPEN")
+  created_at  DateTime        @default(now())
+  updated_at  DateTime        @updatedAt
+  deletedAt   DateTime?
+
+  customer    CustomerProfile @relation(fields: [customerId], references: [id])
+  assignee    User?           @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  workOrders  WorkOrder[]
+  comments    TicketComment[]
+  attachments TicketAttachment[]
+  
+  @@index([customerId])
+  @@index([assigneeId])
+}
+
+model TicketComment {
+  id        String   @id @default(uuid())
+  ticketId  String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id])
+  
+  @@index([ticketId])
+  @@index([authorId])
+}
+
+model TicketAttachment {
+  id        String   @id @default(uuid())
+  ticketId  String
+  fileUrl   String
+  createdAt DateTime @default(now())
+
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  @@index([ticketId])
+}
+
+// ----------------------------------------------------
+// Notifications
+// ----------------------------------------------------
+
+model NotificationTemplate {
+  id        String   @id @default(uuid())
+  type      String   @unique
+  channel   String
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model NotificationLog {
+  id           String   @id @default(uuid())
+  customerId   String
+  type         String
+  channels     Json
+  payload      Json?
+  status       String   @default("PENDING")
+  errorDetails String?
+  createdAt    DateTime @default(now())
+  
+  @@index([customerId])
+}
+
+// ----------------------------------------------------
+// Work Orders
+// ----------------------------------------------------
+
+model WorkOrder {
+  id           String          @id @default(uuid())
+  technicianId String
+  customerId   String
+  ticketId     String?
+  task_type    String          @default("NEW_INSTALLATION")
+  status       String          @default("PENDING")
+  scheduled    DateTime
+  created_at   DateTime        @default(now())
+  updated_at   DateTime        @updatedAt
+
+  technician   User            @relation("TechnicianWorkOrders", fields: [technicianId], references: [id])
+  customer     CustomerProfile @relation("CustomerWorkOrders", fields: [customerId], references: [id])
+  ticket       Ticket?         @relation(fields: [ticketId], references: [id])
+  
+  @@index([technicianId])
+  @@index([customerId])
+  @@index([ticketId])
+}
+
+// ----------------------------------------------------
+// CRM Leads
+// ----------------------------------------------------
+
+model Lead {
+  id          String   @id @default(uuid())
+  full_name   String
+  phone       String
+  address     String
+  kelurahan   String?
+  kecamatan   String?
+  kota        String?
+  notes       String?
+  status      String   @default("NEW")
+  source      String?
+  assigned_to String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+}
+
+// ----------------------------------------------------
+// Inventory
+// ----------------------------------------------------
+
+model InventoryItem {
+  id            String   @id @default(uuid())
+  serial_number String   @unique
+  name          String
+  category      String   @default("ONT")
+  status        String   @default("GUDANG")
+  location_pic  String?
+  customer_id   String?
+  notes         String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+}
+
+// ----------------------------------------------------
+// RADIUS NAS Devices
+// ----------------------------------------------------
+
+model NasDevice {
+  id             String   @id @default(uuid())
+  router_name    String
+  ip_address     String
+  secret         String
+  timezone       String   @default("Asia/Jakarta")
+  snmp_community String?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+}
+
+// ----------------------------------------------------
+// CMS Settings
+// ----------------------------------------------------
+
+model CmsSetting {
+  key   String @id
+  value String
+}
+
+// ----------------------------------------------------
+// Audit Log
+// ----------------------------------------------------
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  user_id    String?
+  targetId   String?
+  targetType String?
+  action     String
+  endpoint   String?
+  method     String?
+  ip_address String?
+  user_agent String?
+  payload    String?
+  created_at DateTime @default(now())
+
+  user       User?    @relation(fields: [user_id], references: [id])
+  @@index([user_id])
+  @@index([targetId])
+}
+
+// ----------------------------------------------------
+// FreeRADIUS Integration Tables
+// ----------------------------------------------------
+
+model RadCheck {
+  id        Int    @id @default(autoincrement())
+  username  String @default("") @db.VarChar(64)
+  attribute String @default("") @db.VarChar(64)
+  op        String @default("==") @db.VarChar(2)
+  value     String @default("") @db.VarChar(253)
+
+  @@map("radcheck")
+  @@index([username])
+}
+
+model RadReply {
+  id        Int    @id @default(autoincrement())
+  username  String @default("") @db.VarChar(64)
+  attribute String @default("") @db.VarChar(64)
+  op        String @default("=") @db.VarChar(2)
+  value     String @default("") @db.VarChar(253)
+
+  @@map("radreply")
+  @@index([username])
+}
+
+model RadUserGroup {
+  id        Int    @id @default(autoincrement())
+  username  String @default("") @db.VarChar(64)
+  groupname String @default("") @db.VarChar(64)
+  priority  Int    @default(1)
+
+  @@map("radusergroup")
+  @@index([username])
+}

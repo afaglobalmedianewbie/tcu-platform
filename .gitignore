@@ -1,0 +1,43 @@
+# Dependencies & Builds
+node_modules/
+.next/
+dist/
+build/
+out/
+
+# Logs & System Caches
+*.log
+.cache/
+.npm/
+.npm-global/
+.pm2/
+.docker/
+snap/
+.gemini/
+.bash_history
+.bash_*
+.viminfo
+.sudo_as_admin_successful
+
+# Executable binaries & user home binaries
+.local/
+
+# System / Secret configs with strict root permissions
+infra/wireguard/*.conf
+infra/wireguard/
+
+# Backup directories
+backup_unused/
+backups/
+tcu-backend-backups/
+
+# System / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+appengine-generated/
+
+# Local environment secrets (Keep .env.example)
+.env.local
+.env.*.local

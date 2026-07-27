@@ -1,0 +1,1669 @@
+// =============================================================================
+//
+//  TCU PLATFORM — PRISMA SCHEMA DRAFT
+//  File   : backend/prisma/drafts/schema.tcu-platform.draft.prisma
+//  Status : DRAFT — REVIEW ONLY
+//
+//  ╔══════════════════════════════════════════════════════════════════╗
+//  ║  ⚠ WARNING: DO NOT RUN prisma migrate OR prisma db push        ║
+//  ║  ⚠ DO NOT CONNECT TO PRODUCTION DATABASE                       ║
+//  ║  This file is for architecture review and team alignment only.  ║
+//  ╚══════════════════════════════════════════════════════════════════╝
+//
+//  Database    : PostgreSQL 16
+//  ORM         : Prisma 5.x
+//  Architect   : Senior Database Architect — TCU Platform
+//  Date        : 2026-07-14
+//
+//  Modules (11):
+//    01  Auth / RBAC
+//    02  CRM
+//    03  Customers
+//    04  Packages
+//    05  Billing
+//    06  Ticketing
+//    07  Network / RADIUS
+//    08  FTTH
+//    09  VPN
+//    10  Notification
+//    11  Files
+//
+// =============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  // previewFeatures = ["fullTextSearch"] // Enable when PostgreSQL FTS is needed
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+// =============================================================================
+// ▓▓▓ ENUMS — Defined once, referenced across modules
+// =============================================================================
+
+// ── Module 01: Auth ──────────────────────────────────────────────────────────
+
+/// How the user authenticates into the system.
+enum AuthProvider {
+  LOCAL      // bcrypt password stored in DB
+  KEYCLOAK   // Keycloak OIDC (Phase 2+)
+  GOOGLE     // OAuth2 via Google
+}
+
+/// Overall account status for every user regardless of role.
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED            // Admin-blocked
+  PENDING_VERIFICATION // Awaiting email verification
+}
+
+// ── Module 02: CRM ───────────────────────────────────────────────────────────
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  SURVEY_SCHEDULED
+  PROPOSAL_SENT
+  NEGOTIATION
+  CONVERTED
+  LOST
+}
+
+enum LeadSource {
+  WEBSITE
+  REFERRAL
+  WALK_IN
+  SOCIAL_MEDIA
+  TELEMARKETING
+  OUTDOOR_AD
+  OTHER
+}
+
+enum FollowUpType {
+  CALL
+  EMAIL
+  WHATSAPP
+  SITE_VISIT
+  MEETING
+  OTHER
+}
+
+enum PipelineStageColor {
+  GRAY
+  BLUE
+  YELLOW
+  ORANGE
+  GREEN
+  RED
+}
+
+// ── Module 03: Customers ─────────────────────────────────────────────────────
+
+enum CustomerStatus {
+  PROSPECT     // Converted lead, not yet installed
+  ACTIVE       // Live subscriber
+  ISOLATED     // PPPoE locked due to overdue invoice (auto by cron)
+  SUSPENDED    // Manually suspended by admin
+  TERMINATED   // Contract ended
+}
+
+enum DocumentType {
+  KTP          // Kartu Tanda Penduduk
+  KK           // Kartu Keluarga
+  NPWP         // NPWP Perusahaan
+  AKTA         // Akta Perusahaan
+  SIUP
+  OTHER
+}
+
+enum ServiceStatus {
+  PENDING_INSTALLATION
+  ACTIVE
+  SUSPENDED
+  TERMINATED
+}
+
+// ── Module 04: Packages ──────────────────────────────────────────────────────
+
+enum PackageType {
+  FTTH         // Fiber-to-the-Home
+  WIRELESS     // Wireless last-mile
+  DEDICATED    // Dedicated leased line
+  HOSTED       // Hosting/cloud service
+}
+
+enum PackageStatus {
+  ACTIVE
+  INACTIVE     // Not offered to new customers
+  ARCHIVED     // Fully retired
+}
+
+// ── Module 05: Billing ───────────────────────────────────────────────────────
+
+enum InvoiceStatus {
+  DRAFT        // Being assembled, not yet sent
+  ISSUED       // Sent to customer
+  PAID         // Fully settled
+  OVERDUE      // Past due_date and still unpaid
+  PARTIAL      // Partially paid
+  CANCELLED    // Voided before payment
+  WAIVED       // Written off (bad debt)
+}
+
+enum PaymentStatus {
+  PENDING      // Gateway link created, awaiting customer action
+  SUCCESS      // Payment confirmed
+  FAILED       // Transaction declined or expired
+  REFUNDED     // Money returned
+  EXPIRED      // Link expired before payment
+}
+
+enum PaymentType {
+  CASH
+  BANK_TRANSFER
+  VIRTUAL_ACCOUNT
+  QRIS
+  EWALLET
+  XENDIT
+  MIDTRANS
+  OTHER
+}
+
+enum PaymentLogEvent {
+  CREATED      // Payment record created
+  GATEWAY_SENT // Link sent to customer
+  CALLBACK     // Gateway sent a webhook
+  CONFIRMED    // Payment confirmed & invoice updated
+  FAILED
+  REFUNDED
+  EXPIRED
+}
+
+// ── Module 06: Ticketing ─────────────────────────────────────────────────────
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER     // Waiting for customer to respond
+  WAITING_PARTS        // Waiting for spare parts
+  ESCALATED
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketCategory {
+  INTERNET_DOWN
+  SLOW_SPEED
+  INTERMITTENT
+  BILLING_DISPUTE
+  INSTALLATION_REQUEST
+  UPGRADE_DOWNGRADE
+  RELOCATION
+  DEVICE_ISSUE
+  PERTANYAAN_UMUM     // General inquiry
+  OTHER
+}
+
+enum WorkOrderType {
+  NEW_INSTALLATION
+  REPAIR
+  UPGRADE
+  DOWNGRADE
+  SURVEY
+  RELOCATION
+  EQUIPMENT_RETRIEVAL
+  PREVENTIVE_MAINTENANCE
+}
+
+enum WorkOrderStatus {
+  PENDING          // Created, not yet assigned
+  ASSIGNED         // Assigned to a technician
+  ON_ROUTE         // Technician en route
+  ON_SITE          // Technician at customer location
+  COMPLETED
+  CANCELLED
+}
+
+// ── Module 07: RADIUS ────────────────────────────────────────────────────────
+
+enum RadiusUserStatus {
+  ACTIVE
+  SUSPENDED        // PPPoE password set to ISOLIR_LOCKED
+  DISABLED         // Fully deactivated
+}
+
+enum RadiusSessionStatus {
+  ACTIVE
+  TERMINATED
+  FAILED
+}
+
+// ── Module 08: FTTH ──────────────────────────────────────────────────────────
+
+enum OltStatus {
+  ONLINE
+  OFFLINE
+  DEGRADED         // Partial loss of service
+  MAINTENANCE
+  UNKNOWN
+}
+
+enum OnuStatus {
+  ONLINE
+  OFFLINE
+  LOS              // Loss Of Signal — red light on ONT
+  ROGUE            // ONT causing noise on PON port
+  UNCONFIGURED
+  UNKNOWN
+}
+
+enum SplitterType {
+  RATIO_1x2
+  RATIO_1x4
+  RATIO_1x8
+  RATIO_1x16
+  RATIO_1x32
+  RATIO_1x64
+}
+
+enum FiberRouteType {
+  BACKBONE         // Core inter-PoP links
+  FEEDER           // OLT → ODC
+  DISTRIBUTION     // ODC → ODP
+  DROP             // ODP → Customer
+}
+
+enum FiberRouteMaterial {
+  SINGLE_MODE_G652D
+  SINGLE_MODE_G657A
+  MULTIMODE_OM3
+  OTHER
+}
+
+// ── Module 09: VPN ───────────────────────────────────────────────────────────
+
+enum VpnUserStatus {
+  ACTIVE
+  DISABLED
+  REVOKED
+}
+
+enum VpnPeerType {
+  DEVICE           // Mikrotik, OLT, server
+  STAFF_ADMIN      // Remote admin workstation
+  OFFICE           // Branch office gateway
+  MONITORING       // Monitoring/SNMP collector
+}
+
+enum VpnTunnelStatus {
+  UP
+  DOWN
+  DEGRADED
+  UNKNOWN
+}
+
+// ── Module 10: Notification ──────────────────────────────────────────────────
+
+enum NotificationChannel {
+  EMAIL
+  WHATSAPP
+  SMS
+  IN_APP
+  PUSH
+}
+
+enum NotificationStatus {
+  PENDING          // Queued, not yet sent
+  SENT             // Dispatched to channel
+  DELIVERED        // Channel confirmed delivery
+  READ             // User opened / acknowledged
+  FAILED           // Dispatch error
+}
+
+// ── Module 11: Files ─────────────────────────────────────────────────────────
+
+enum FileCategory {
+  DOCUMENT         // Contracts, agreements
+  IDENTITY         // KTP, KK scans
+  PROOF_OF_PAYMENT // Payment receipts
+  WORK_PROOF       // Technician installation photos
+  NETWORK_MAP      // Fiber route diagrams
+  PROFILE_PHOTO
+  OTHER
+}
+
+
+// =============================================================================
+// ▓▓▓ MODULE 01 — AUTH / RBAC
+// =============================================================================
+
+// ─── User ────────────────────────────────────────────────────────────────────
+/// Central identity record for every person in the system:
+/// admin, staff, technician, and customer.
+/// Authentication can be local (bcrypt) or via Keycloak SSO (Phase 2+).
+model User {
+  id               String       @id @default(uuid()) @db.Uuid
+
+  // ── Identity ──────────────────────────────────────────────────────────────
+  email            String       @unique @db.VarChar(255)
+  username         String?      @unique @db.VarChar(64)
+  phone            String?      @unique @db.VarChar(20)
+  fullName         String       @db.VarChar(255)
+  avatarUrl        String?
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  provider         AuthProvider @default(LOCAL)
+  /// bcrypt hash — nullable because Keycloak users have no local password
+  passwordHash     String?
+  keycloakId       String?      @unique @db.VarChar(255)
+  /// TOTP shared secret (otplib) — stored encrypted in production
+  totpSecret       String?
+  totpEnabled      Boolean      @default(false)
+
+  // ── Status & Meta ─────────────────────────────────────────────────────────
+  status           UserStatus   @default(ACTIVE)
+  lastLoginAt      DateTime?
+  preferences      Json?        // { theme, language, sessionTimeout, ... }
+
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  // ── Relations ─────────────────────────────────────────────────────────────
+  roles            UserRole[]
+  refreshTokens    RefreshToken[]
+  auditLogs        AuditLog[]
+  customer         Customer?
+
+  // Ticket interactions
+  assignedTickets  Ticket[]     @relation("TicketAssignee")
+  ticketComments   TicketComment[]
+
+  // Work orders
+  createdWorkOrders WorkOrder[] @relation("WOCreatedBy")
+  assignedWorkOrders WorkOrder[] @relation("WOTechnician")
+
+  // CRM
+  assignedLeads    CrmLead[]    @relation("LeadAssignee")
+  followUps        CrmFollowUp[] @relation("FollowUpBy")
+
+  // Notifications
+  notifications    Notification[]
+
+  @@index([email])
+  @@index([username])
+  @@index([status])
+  @@index([provider])
+  @@map("users")
+}
+
+// ─── Role ────────────────────────────────────────────────────────────────────
+/// Named role that groups a set of permissions.
+/// System roles (ADMIN, STAFF, TECHNICIAN, CUSTOMER) cannot be deleted.
+model Role {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @unique @db.VarChar(64)
+  description String?
+  isSystem    Boolean   @default(false)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  userRoles   UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+// ─── Permission ──────────────────────────────────────────────────────────────
+/// Atomic access action in the format "module:action".
+/// Example: "billing:read", "customers:isolate", "radius:suspend"
+model Permission {
+  id          String    @id @default(uuid()) @db.Uuid
+  /// Format: "<module>:<action>" e.g. "billing:create"
+  action      String    @unique @db.VarChar(128)
+  /// Module grouping for UI display
+  module      String    @db.VarChar(64)
+  description String?
+
+  roles       RolePermission[]
+
+  @@index([module])
+  @@map("permissions")
+}
+
+// ─── UserRole (junction) ─────────────────────────────────────────────────────
+model UserRole {
+  userId      String    @db.Uuid
+  roleId      String    @db.Uuid
+  grantedAt   DateTime  @default(now())
+  grantedBy   String?   @db.Uuid  // User ID of the admin who assigned
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+// ─── RolePermission (junction) ───────────────────────────────────────────────
+model RolePermission {
+  roleId       String    @db.Uuid
+  permissionId String    @db.Uuid
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+// ─── RefreshToken ────────────────────────────────────────────────────────────
+/// Stores long-lived refresh tokens for the local JWT auth flow.
+/// Each token is a securely generated random string (hashed before storage).
+model RefreshToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @db.Uuid
+  /// SHA-256 hash of the raw token sent to client
+  tokenHash   String    @unique @db.VarChar(64)
+  userAgent   String?   @db.VarChar(512)
+  ipAddress   String?   @db.VarChar(45)
+  expiresAt   DateTime
+  revokedAt   DateTime?  // Non-null means this token is invalid
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+// ─── AuditLog ────────────────────────────────────────────────────────────────
+/// Immutable append-only record of every state-changing API call.
+/// Written asynchronously — never blocks the response path.
+model AuditLog {
+  id            BigInt    @id @default(autoincrement())
+  userId        String?   @db.Uuid
+  /// e.g. "Customer", "Invoice", "RadiusUser"
+  entityType    String?   @db.VarChar(64)
+  entityId      String?   @db.VarChar(128)
+  /// HTTP method + path e.g. "PATCH /api/admin/customers/:id/isolate"
+  action        String    @db.VarChar(255)
+  module        String?   @db.VarChar(64)
+  previousState Json?
+  newState      Json?
+  /// Truncated request body (max 500 chars)
+  payload       String?
+  ipAddress     String?   @db.VarChar(45)
+  userAgent     String?   @db.VarChar(512)
+  createdAt     DateTime  @default(now())
+
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+
+// =============================================================================
+// ▓▓▓ MODULE 02 — CRM
+// =============================================================================
+
+// ─── CrmPipelineStage ────────────────────────────────────────────────────────
+/// Configurable sales pipeline stages ordered by `position`.
+/// Used to group CrmLeads on a Kanban-style CRM board.
+model CrmPipelineStage {
+  id          String             @id @default(uuid()) @db.Uuid
+  name        String             @db.VarChar(64)
+  description String?
+  position    Int                @default(0)  // Sort order
+  color       PipelineStageColor @default(GRAY)
+  isDefault   Boolean            @default(false)
+  isConverted Boolean            @default(false)  // Final "success" stage
+  isLost      Boolean            @default(false)  // Final "lost" stage
+
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  leads       CrmLead[]
+
+  @@map("crm_pipeline_stages")
+}
+
+// ─── CrmLead ─────────────────────────────────────────────────────────────────
+/// A potential customer. Can progress through pipeline stages and,
+/// when converted, is linked to a Customer record.
+model CrmLead {
+  id            String      @id @default(uuid()) @db.Uuid
+
+  // Contact info
+  fullName      String      @db.VarChar(255)
+  phone         String      @db.VarChar(20)
+  email         String?     @db.VarChar(255)
+
+  // Address detail (matches production server.js Lead fields)
+  address       String?
+  kelurahan     String?     @db.VarChar(128)  // Village/sub-district
+  kecamatan     String?     @db.VarChar(128)  // District
+  kota          String?     @db.VarChar(128)  // City
+
+  // Coverage geolocation for field survey
+  latitude      Decimal?    @db.Decimal(10, 8)
+  longitude     Decimal?    @db.Decimal(11, 8)
+
+  source        LeadSource  @default(WEBSITE)
+  status        LeadStatus  @default(NEW)
+  notes         String?
+
+  // CRM pipeline
+  stageId       String?     @db.Uuid
+
+  // Assignment
+  assignedToId  String?     @db.Uuid
+
+  // Conversion link — populated when status = CONVERTED
+  customerId    String?     @unique @db.Uuid
+
+  convertedAt   DateTime?
+  expectedClose DateTime?   // Sales forecast date
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  stage         CrmPipelineStage? @relation(fields: [stageId], references: [id])
+  assignedTo    User?        @relation("LeadAssignee", fields: [assignedToId], references: [id])
+  customer      Customer?    @relation(fields: [customerId], references: [id])
+  followUps     CrmFollowUp[]
+
+  @@index([status])
+  @@index([stageId])
+  @@index([assignedToId])
+  @@index([phone])
+  @@map("crm_leads")
+}
+
+// ─── CrmFollowUp ─────────────────────────────────────────────────────────────
+/// Activity log for a lead: calls, visits, WhatsApp messages, etc.
+model CrmFollowUp {
+  id          String      @id @default(uuid()) @db.Uuid
+  leadId      String      @db.Uuid
+  doneById    String      @db.Uuid
+
+  type        FollowUpType
+  summary     String      // What was said / done
+  outcome     String?     // Result of the follow-up
+  scheduledAt DateTime?   // For planned future follow-ups
+  doneAt      DateTime?   // Actual completion time
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  lead        CrmLead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  doneBy      User        @relation("FollowUpBy", fields: [doneById], references: [id])
+
+  @@index([leadId])
+  @@index([doneById])
+  @@map("crm_follow_ups")
+}
+
+
+// =============================================================================
+// ▓▓▓ MODULE 03 — CUSTOMERS
+// =============================================================================
+
+// ─── Customer ────────────────────────────────────────────────────────────────
+/// The main customer record. One User can have one Customer profile.
+/// customer_code is the human-readable ID shown on invoices: CUST-YYYYMM-XXXX
+model Customer {
+  id             String         @id @default(uuid()) @db.Uuid
+  /// Human-readable code shown on invoices and portal: CUST-YYYYMM-XXXX
+  customerCode   String         @unique @db.VarChar(32)
+
+  userId         String         @unique @db.Uuid
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fullName       String         @db.VarChar(255)
+  identityNumber String?        @db.VarChar(20)  // NIK / KTP number
+  phone          String?        @db.VarChar(20)
+  email          String?        @db.VarChar(255)
+
+  status         CustomerStatus @default(PROSPECT)
+
+  // Referral
+  referralCode   String?        @db.VarChar(32)
+  referredById   String?        @db.Uuid
+
+  joinedAt       DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  // Relations
+  lead           CrmLead?
+  addresses      CustomerAddress[]
+  contacts       CustomerContact[]
+  documents      CustomerDocument[]
+  services       CustomerService[]
+  invoices       Invoice[]
+  payments       Payment[]
+  tickets        Ticket[]
+  workOrders     WorkOrder[]
+
+  @@index([status])
+  @@index([customerCode])
+  @@map("customers")
+}
+
+// ─── CustomerAddress ─────────────────────────────────────────────────────────
+/// A customer can have multiple addresses: billing, installation, mailing.
+model CustomerAddress {
+  id          String    @id @default(uuid()) @db.Uuid
+  customerId  String    @db.Uuid
+  label       String    @db.VarChar(64)  // e.g. "Alamat Pemasangan", "Alamat Penagihan"
+  isPrimary   Boolean   @default(false)
+
+  street      String
+  rt          String?   @db.VarChar(8)
+  rw          String?   @db.VarChar(8)
+  kelurahan   String?   @db.VarChar(128)
+  kecamatan   String?   @db.VarChar(128)
+  kota        String?   @db.VarChar(128)
+  province    String?   @db.VarChar(128)
+  postalCode  String?   @db.VarChar(10)
+
+  latitude    Decimal?  @db.Decimal(10, 8)
+  longitude   Decimal?  @db.Decimal(11, 8)
+  mapsUrl     String?   // Google Maps share link
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("customer_addresses")
+}
+
+// ─── CustomerContact ─────────────────────────────────────────────────────────
+/// Secondary contacts for a customer (spouse, PIC for corporate).
+model CustomerContact {
+  id          String    @id @default(uuid()) @db.Uuid
+  customerId  String    @db.Uuid
+  name        String    @db.VarChar(255)
+  relationship String?  @db.VarChar(64)  // e.g. "Suami/Istri", "PIC IT"
+  phone       String    @db.VarChar(20)
+  email       String?   @db.VarChar(255)
+  isPrimary   Boolean   @default(false)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("customer_contacts")
+}
+
+// ─── CustomerDocument ────────────────────────────────────────────────────────
+/// Uploaded identity / legal documents for KYC.
+model CustomerDocument {
+  id           String       @id @default(uuid()) @db.Uuid
+  customerId   String       @db.Uuid
+  type         DocumentType
+  description  String?
+  fileAssetId  String?      @db.Uuid  // FK to FileAsset
+  verifiedAt   DateTime?
+  verifiedById String?      @db.Uuid
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  fileAsset    FileAsset?   @relation(fields: [fileAssetId], references: [id])
+
+  @@index([customerId])
+  @@index([type])
+  @@map("customer_documents")
+}
+
+// ─── CustomerService ─────────────────────────────────────────────────────────
+/// One "line" of service subscription for a customer.
+/// A customer can have multiple services (e.g. 2 locations with different plans).
+model CustomerService {
+  id               String        @id @default(uuid()) @db.Uuid
+  customerId       String        @db.Uuid
+  packageId        String        @db.Uuid
+
+  status           ServiceStatus @default(PENDING_INSTALLATION)
+
+  // PPPoE credentials — synced to RADIUS radcheck/radusergroup
+  pppoeUsername    String?       @unique @db.VarChar(64)
+  pppoePassword    String?       @db.VarChar(64)
+
+  // Static IP (synced to RADIUS radreply Framed-IP-Address)
+  staticIp         String?       @db.VarChar(15)
+
+  activationDate   DateTime?
+  nextBillingDate  DateTime?
+  terminationDate  DateTime?
+  terminationReason String?
+
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  customer         Customer      @relation(fields: [customerId], references: [id])
+  package          ServicePackage @relation(fields: [packageId], references: [id])
+  onuDevice        OnuDevice?     @relation("ServiceOnu")
+  invoices         Invoice[]
+
+  @@index([customerId])
+  @@index([packageId])
+  @@index([status])
+  @@map("customer_services")
+}
+
+
+// =============================================================================
+// ▓▓▓ MODULE 04 — PACKAGES
+// =============================================================================
+
+// ─── ServicePackage ──────────────────────────────────────────────────────────
+/// An internet or hosting plan that can be subscribed to by customers.
+model ServicePackage {
+  id               String        @id @default(uuid()) @db.Uuid
+  name             String        @db.VarChar(128)
+  type             PackageType   @default(FTTH)
+  status           PackageStatus @default(ACTIVE)
+
+  // Bandwidth
+  downloadMbps     Int
+  uploadMbps       Int           @default(0)
+
+  // FUP (Fair Use Policy)
+  hasFup           Boolean       @default(false)
+  fupLimitGb       Int?
+
+  // Pricing
+  monthlyPrice     Decimal       @db.Decimal(12, 2)
+  setupFee         Decimal       @db.Decimal(12, 2) @default(0)
+  billingCycleDays Int           @default(30)
+
+  // Mikrotik / RADIUS
+  mikrotikProfile  String?       @db.VarChar(64)  // PPPoE profile / queue name
+
+  // Marketing
+  features         String[]      // Array of feature strings for public pricing page
+  isPopular        Boolean       @default(false)
+  sortOrder        Int           @default(0)
+
+  // Validity
+  validFrom        DateTime?
+  validUntil       DateTime?
+
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  services         CustomerService[]
+  addons           ServiceAddon[]
+
+  @@index([status])
+  @@index([type])
+  @@map("service_packages")
+}
+
+// ─── ServiceAddon ────────────────────────────────────────────────────────────
+/// Optional add-ons sold alongside a package (e.g. static IP, ONT rental, VoIP).
+model ServiceAddon {
+  id          String        @id @default(uuid()) @db.Uuid
+  packageId   String?       @db.Uuid   // Null = standalone addon
+  name        String        @db.VarChar(128)
+  description String?
+  price       Decimal       @db.Decimal(12, 2)
+  isActive    Boolean       @default(true)
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  package     ServicePackage? @relation(fields: [packageId], references: [id])
+
+  @@index([packageId])
+  @@map("service_addons")
+}
+
+
+// =============================================================================
+// ▓▓▓ MODULE 05 — BILLING
+// =============================================================================
+
+// ─── Invoice ─────────────────────────────────────────────────────────────────
+/// Monthly billing record issued to a customer.
+/// invoiceNumber is the human-readable ID: INV-YYYYMM-XXXX
+model Invoice {
+  id              String        @id @default(uuid()) @db.Uuid
+  /// Human-readable: INV-YYYYMM-XXXX
+  invoiceNumber   String        @unique @db.VarChar(32)
+
+  customerId      String        @db.Uuid
+  serviceId       String?       @db.Uuid  // CustomerService this invoice covers
+
+  /// Billing period label e.g. "Juli 2026"
+  period          String        @db.VarChar(32)
+  issueDate       DateTime      @default(now())
+  dueDate         DateTime
+  paidAt          DateTime?
+
+  subtotal        Decimal       @db.Decimal(12, 2)
+  taxRate         Decimal       @db.Decimal(5, 4)  @default(0)  // e.g. 0.11 = 11%
+  taxAmount       Decimal       @db.Decimal(12, 2) @default(0)
+  totalAmount     Decimal       @db.Decimal(12, 2)
+
+  status          InvoiceStatus @default(DRAFT)
+  notes           String?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  service         CustomerService? @relation(fields: [serviceId], references: [id])
+  items           InvoiceItem[]
+  payments        Payment[]
+
+  @@index([customerId])
+  @@index([serviceId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([period])
+  @@map("invoices")
+}
+
+// ─── InvoiceItem ─────────────────────────────────────────────────────────────
+/// Line items within an invoice (monthly fee, setup fee, addon, etc.).
+model InvoiceItem {
+  id          String    @id @default(uuid()) @db.Uuid
+  invoiceId   String    @db.Uuid
+  description String    @db.VarChar(255)
+  quantity    Int       @default(1)
+  unitPrice   Decimal   @db.Decimal(12, 2)
+  totalPrice  Decimal   @db.Decimal(12, 2)
+  sortOrder   Int       @default(0)
+
+  invoice     Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
+
+// ─── PaymentMethod ───────────────────────────────────────────────────────────
+/// Configurable payment methods managed by admin (enables/disables channels).
+model PaymentMethod {
+  id           String      @id @default(uuid()) @db.Uuid
+  name         String      @db.VarChar(64)
+  type         PaymentType
+  isActive     Boolean     @default(true)
+  /// Gateway-specific config (API keys, account numbers, etc.) stored as JSON
+  config       Json?
+  instructions String?     // Markdown for "how to pay" shown on payment page
+  logoUrl      String?
+  sortOrder    Int         @default(0)
+
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  payments     Payment[]
+
+  @@map("payment_methods")
+}
+
+// ─── Payment ─────────────────────────────────────────────────────────────────
+/// A payment attempt against one invoice. An invoice can have multiple
+/// attempts before a successful one (gateway retries, partial payments).
+model Payment {
+  id               String        @id @default(uuid()) @db.Uuid
+  invoiceId        String        @db.Uuid
+  customerId       String        @db.Uuid
+  paymentMethodId  String?       @db.Uuid
+
+  amount           Decimal       @db.Decimal(12, 2)
+  status           PaymentStatus @default(PENDING)
+
+  /// External reference from payment gateway (Xendit ID, bank ref code, etc.)
+  referenceNumber  String?       @db.VarChar(255)
+  /// URL of hosted payment page (Xendit invoice URL)
+  paymentUrl       String?
+  /// Raw JSON response from gateway webhook
+  gatewayResponse  Json?
+
+  paidAt           DateTime?
+  expiresAt        DateTime?     // For gateway links with expiry
+
+  notes            String?
+
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  invoice          Invoice         @relation(fields: [invoiceId], references: [id])
+  customer         Customer        @relation(fields: [customerId], references: [id])
+  paymentMethod    PaymentMethod?  @relation(fields: [paymentMethodId], references: [id])
+  logs             PaymentLog[]
+
+  @@index([invoiceId])
+  @@index([customerId])
+  @@index([status])
+  @@index([referenceNumber])
+  @@map("payments")
+}
+
+// ─── PaymentLog ──────────────────────────────────────────────────────────────
+/// Append-only event journal for every state transition on a Payment.
+/// Useful for debugging gateway callbacks and reconciliation.
+model PaymentLog {
+  id          BigInt          @id @default(autoincrement())
+  paymentId   String          @db.Uuid
+  event       PaymentLogEvent
+  data        Json?           // Raw event payload
+  note        String?
+  createdAt   DateTime        @default(now())
+
+  payment     Payment         @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([event])
+  @@index([createdAt])
+  @@map("payment_logs")
+}
+
+
+// =============================================================================
+// ▓▓▓ MODULE 06 — TICKETING
+// =============================================================================
+
+// ─── Ticket ──────────────────────────────────────────────────────────────────
+/// Customer support / fault report ticket.
+/// Tickets can spawn WorkOrders when a field visit is needed.
+model Ticket {
+  id               String         @id @default(uuid()) @db.Uuid
+  /// Human-readable: TKT-YYYYMM-XXXX
+  ticketNumber     String         @unique @db.VarChar(32)
+
+  customerId       String         @db.Uuid
+  assigneeId       String?        @db.Uuid
+
+  subject          String         @db.VarChar(255)
+  description      String?
+  category         TicketCategory @default(INTERNET_DOWN)
+  priority         TicketPriority @default(MEDIUM)
+  status           TicketStatus   @default(OPEN)
+
+  // SLA tracking
+  slaDeadline      DateTime?
+  firstResponseAt  DateTime?
+  resolvedAt       DateTime?
+  closedAt         DateTime?
+
+  // Resolution
+  resolutionNote   String?
+
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  customer         Customer       @relation(fields: [customerId], references: [id])
+  assignee         User?          @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  comments         TicketComment[]
+  attachments      TicketAttachment[]
+  workOrder        WorkOrder?
+
+  @@index([customerId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+  @@map("tickets")
+}
+
+// ─── TicketComment ───────────────────────────────────────────────────────────
+/// Threaded conversation on a ticket (staff↔customer).
+model TicketComment {
+  id          String    @id @default(uuid()) @db.Uuid
+  ticketId    String    @db.Uuid
+  authorId    String    @db.Uuid
+  /// True = internal staff note (hidden from customer portal)
+  isInternal  Boolean   @default(false)
+  /// True = staff comment; False = customer comment
+  isStaff     Boolean   @default(false)
+  body        String    // Markdown or plain text
+
+  editedAt    DateTime?
+  createdAt   DateTime  @default(now())
+
+  ticket      Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author      User      @relation(fields: [authorId], references: [id])
+
+  @@index([ticketId])
+  @@index([authorId])
+  @@map("ticket_comments")
+}
+
+// ─── TicketAttachment ────────────────────────────────────────────────────────
+/// File attachments on a ticket (screenshots, photos, logs).
+model TicketAttachment {
+  id          String    @id @default(uuid()) @db.Uuid
+  ticketId    String    @db.Uuid
+  fileAssetId String    @db.Uuid
+  uploadedById String   @db.Uuid
+  createdAt   DateTime  @default(now())
+
+  ticket      Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  fileAsset   FileAsset @relation(fields: [fileAssetId], references: [id])
+
+  @@index([ticketId])
+  @@map("ticket_attachments")
+}
+
+// ─── WorkOrder ───────────────────────────────────────────────────────────────
+/// Field dispatch instruction for a technician. A work order is always
+/// linked to a Customer and optionally to a Ticket.
+model WorkOrder {
+  id               String          @id @default(uuid()) @db.Uuid
+  /// Human-readable: WO-YYYYMM-XXXX
+  workOrderNumber  String          @unique @db.VarChar(32)
+
+  customerId       String          @db.Uuid
+  ticketId         String?         @unique @db.Uuid  // One WO per Ticket
+  createdById      String          @db.Uuid
+  technicianId     String?         @db.Uuid
+
+  type             WorkOrderType   @default(NEW_INSTALLATION)
+  status           WorkOrderStatus @default(PENDING)
+
+  description      String?
+  scheduledAt      DateTime?
+  startedAt        DateTime?
+  completedAt      DateTime?
+
+  // Site info at time of dispatch
+  siteAddress      String?
+  latitude         Decimal?        @db.Decimal(10, 8)
+  longitude        Decimal?        @db.Decimal(11, 8)
+
+  // Completion details
+  techNotes        String?
+  equipmentUsed    String?         // JSON string or comma-separated serial numbers
+
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  customer         Customer        @relation(fields: [customerId], references: [id])
+  ticket           Ticket?         @relation(fields: [ticketId], references: [id])
+  createdBy        User            @relation("WOCreatedBy", fields: [createdById], references: [id])
+  technician       User?           @relation("WOTechnician", fields: [technicianId], references: [id])
+  proofs           WorkOrderProof[]
+
+  @@index([customerId])
+  @@index([technicianId])
+  @@index([status])
+  @@index([type])
+  @@index([scheduledAt])
+  @@map("work_orders")
+}
+
+// ─── WorkOrderProof ──────────────────────────────────────────────────────────
+/// Photo / document evidence uploaded by the technician on completion.
+model WorkOrderProof {
+  id            String    @id @default(uuid()) @db.Uuid
+  workOrderId   String    @db.Uuid
+  fileAssetId   String    @db.Uuid
+  caption       String?   @db.VarChar(255)
+  uploadedById  String    @db.Uuid
+  createdAt     DateTime  @default(now())
+
+  workOrder     WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  fileAsset     FileAsset @relation(fields: [fileAssetId], references: [id])
+
+  @@index([workOrderId])
+  @@map("work_order_proofs")
+}
+
+
+// =============================================================================
+// ▓▓▓ MODULE 07 — NETWORK / RADIUS
+// =============================================================================
+
+// ─── NasRouter ───────────────────────────────────────────────────────────────
+/// NAS (Network Access Server) — Mikrotik router that sends RADIUS
+/// authentication requests. Maps to FreeRADIUS `nas` table.
+/// ⚠ IP address must be reachable over the VPN tunnel, not direct HTTP.
+model NasRouter {
+  id             String    @id @default(uuid()) @db.Uuid
+  /// Display name e.g. "MKT-HQ-01"
+  routerName     String    @db.VarChar(128)
+  /// NAS IP as seen by FreeRADIUS (VPN IP)
+  ipAddress      String    @unique @db.VarChar(15)
+  /// RADIUS shared secret — keep in sync with Mikrotik RADIUS client config
+  secret         String    @db.VarChar(64)
+  timezone       String    @default("Asia/Jakarta") @db.VarChar(64)
+  snmpCommunity  String?   @db.VarChar(64)
+  description    String?
+  isActive       Boolean   @default(true)
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  radiusSessions RadiusSession[]
+  accounting     RadiusAccounting[]
+
+  @@index([ipAddress])
+  @@map("nas_routers")
+}
+
+// ─── RadiusProfile ───────────────────────────────────────────────────────────
+/// A named RADIUS group (PPPoE profile / queue). One profile per service package.
+/// Synced to FreeRADIUS `radgroupcheck` and `radgroupreply` tables.
+model RadiusProfile {
+  id              String    @id @default(uuid()) @db.Uuid
+  /// Must match Mikrotik PPP Profile name exactly e.g. "profile-50m"
+  profileName     String    @unique @db.VarChar(64)
+  downloadKbps    Int       // Download rate limit
+  uploadKbps      Int       // Upload rate limit
+  burstDownloadKbps Int?    // Burst download
+  burstUploadKbps Int?      // Burst upload
+  sessionTimeout  Int?      // Max session in seconds (0 = unlimited)
+  idleTimeout     Int?      // Idle disconnect in seconds
+  description     String?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  radiusUsers     RadiusUser[]
+
+  @@map("radius_profiles")
+}
+
+// ─── RadiusUser ──────────────────────────────────────────────────────────────
+/// A PPPoE subscriber credential.
+/// This is the TCU Platform's managed view; the actual auth is done by
+/// FreeRADIUS querying the radcheck/radusergroup tables (mapped separately).
+model RadiusUser {
+  id               String           @id @default(uuid()) @db.Uuid
+  /// PPPoE username format: CUST-YYYYMM-XXXX@topclassuniversal.co.id
+  username         String           @unique @db.VarChar(64)
+  /// Stored in cleartext here — mirrored to radcheck Cleartext-Password
+  /// ⚠ In production: store encrypted and decrypt only when syncing to RADIUS
+  password         String           @db.VarChar(128)
+  profileId        String?          @db.Uuid
+
+  status           RadiusUserStatus @default(ACTIVE)
+
+  /// Static IP if allocated (synced to radreply Framed-IP-Address)
+  framedIp         String?          @db.VarChar(15)
+
+  // Link back to business layer
+  customerServiceId String?         @unique @db.Uuid
+
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  profile          RadiusProfile?   @relation(fields: [profileId], references: [id])
+  sessions         RadiusSession[]
+
+  @@index([username])
+  @@index([status])
+  @@index([profileId])
+  @@map("radius_users")
+}
+
+// ─── RadiusSession ───────────────────────────────────────────────────────────
+/// Real-time PPPoE session records (active connections).
+/// Populated by RADIUS Accounting-Start and cleared by Accounting-Stop.
+model RadiusSession {
+  id               String              @id @default(uuid()) @db.Uuid
+  radiusUserId     String              @db.Uuid
+  nasId            String?             @db.Uuid
+  sessionId        String              @db.VarChar(64)  // RADIUS Acct-Session-Id
+  /// Allocated IP for this session
+  assignedIp       String?             @db.VarChar(15)
+  nasPort          String?             @db.VarChar(32)
+  calledStationId  String?             @db.VarChar(50)  // NAS interface
+  callingStationId String?             @db.VarChar(50)  // MAC address
+
+  status           RadiusSessionStatus @default(ACTIVE)
+
+  startedAt        DateTime
+  updatedAt        DateTime            @updatedAt
+  endedAt          DateTime?
+
+  radiusUser       RadiusUser          @relation(fields: [radiusUserId], references: [id])
+  nas              NasRouter?          @relation(fields: [nasId], references: [id])
+
+  @@index([radiusUserId])
+  @@index([nasId])
+  @@index([status])
+  @@index([sessionId])
+  @@map("radius_sessions")
+}
+
+// ─── RadiusAccounting ────────────────────────────────────────────────────────
+/// Historical session accounting records — mirrors FreeRADIUS radacct.
+/// Used for usage reporting, overdue calculation, and diagnostics.
+model RadiusAccounting {
+  id                  BigInt    @id @default(autoincrement())
+  acctSessionId       String    @db.VarChar(64)
+  acctUniqueId        String    @unique @db.VarChar(32)
+  username            String    @db.VarChar(64)
+  nasId               String?   @db.Uuid
+  nasIpAddress        String    @db.VarChar(15)
+  nasPort             String?   @db.VarChar(15)
+  acctStartTime       DateTime?
+  acctUpdateTime      DateTime?
+  acctStopTime        DateTime?
+  acctSessionTime     Int?      // Seconds
+  acctInputOctets     BigInt?   // Bytes uploaded by customer
+  acctOutputOctets    BigInt?   // Bytes downloaded by customer
+  framedIpAddress     String?   @db.VarChar(15)
+  calledStationId     String?   @db.VarChar(50)
+  callingStationId    String?   @db.VarChar(50)
+  acctTerminateCause  String?   @db.VarChar(32)  // e.g. "User-Request", "Idle-Timeout"
+
+  nas                 NasRouter? @relation(fields: [nasId], references: [id])
+
+  @@index([username])
+  @@index([acctStartTime])
+  @@index([nasIpAddress])
+  @@map("radius_accounting")
+}
+
+
+// =============================================================================
+// ▓▓▓ MODULE 08 — FTTH (Fiber-to-the-Home)
+// =============================================================================
+
+// ─── OltDevice ───────────────────────────────────────────────────────────────
+/// Optical Line Terminal — the main fiber aggregation device in the POP.
+/// ⚠ OLT management must go through the VPN tunnel (SNMP/GenieACS), not direct HTTP.
+model OltDevice {
+  id              String    @id @default(uuid()) @db.Uuid
+  name            String    @db.VarChar(128)
+  vendor          String    @db.VarChar(64)   // ZTE, Huawei, Fiberhome
+  model           String?   @db.VarChar(64)
+  firmwareVersion String?   @db.VarChar(64)
+
+  /// Management IP (reachable via VPN only)
+  managementIp    String    @unique @db.VarChar(15)
+  snmpCommunity   String?   @db.VarChar(64)
+  snmpVersion     String    @default("2c") @db.VarChar(4)
+
+  /// GenieACS device ID for TR-069 management
+  genieacsId      String?   @db.VarChar(128)
+
+  location        String?   // Data centre / POP location name
+  ponPorts        Int       @default(0)   // Total PON port count
+  status          OltStatus @default(UNKNOWN)
+  lastPolledAt    DateTime?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  onuDevices      OnuDevice[]
+  odcs            Odc[]
+
+  @@index([status])
+  @@map("olt_devices")
+}
+
+// ─── OnuDevice ───────────────────────────────────────────────────────────────
+/// Optical Network Unit / ONT installed at the customer premises.
+model OnuDevice {
+  id              String    @id @default(uuid()) @db.Uuid
+  oltId           String    @db.Uuid
+
+  /// Serial number as reported by OLT — must be globally unique
+  serialNumber    String    @unique @db.VarChar(64)
+  macAddress      String?   @db.VarChar(17)
+  vendor          String?   @db.VarChar(64)
+  model           String?   @db.VarChar(64)
+  firmwareVersion String?   @db.VarChar(64)
+
+  /// PON port notation: slot/card/port e.g. "0/1/2"
+  ponPort         String?   @db.VarChar(16)
+  /// ONU index within the PON port
+  onuId           Int?
+
+  /// Optical signal levels from SNMP/GenieACS polling
+  rxPowerDbm      Decimal?  @db.Decimal(6, 2)  // Receive signal (dBm)
+  txPowerDbm      Decimal?  @db.Decimal(6, 2)  // Transmit signal (dBm)
+
+  status          OnuStatus @default(UNKNOWN)
+
+  /// GenieACS / TR-069 device ID
+  genieacsId      String?   @db.VarChar(128)
+
+  /// Link to customer service (null = in warehouse / unassigned)
+  customerServiceId String? @unique @db.Uuid
+
+  odpId           String?   @db.Uuid  // ODP this ONU is spliced from
+
+  lastSeenAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  olt             OltDevice      @relation(fields: [oltId], references: [id])
+  odp             Odp?           @relation(fields: [odpId], references: [id])
+  customerService CustomerService? @relation("ServiceOnu", fields: [customerServiceId], references: [id])
+
+  @@index([oltId])
+  @@index([status])
+  @@index([odpId])
+  @@map("onu_devices")
+}
+
+// ─── Odc ─────────────────────────────────────────────────────────────────────
+/// Optical Distribution Cabinet — the intermediate fiber aggregation point
+/// between OLT and ODPs in the street cabinet.
+model Odc {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @db.VarChar(128)   // e.g. "ODC-AREA1-01"
+  oltId       String    @db.Uuid
+  address     String?
+  latitude    Decimal?  @db.Decimal(10, 8)
+  longitude   Decimal?  @db.Decimal(11, 8)
+  portCount   Int       @default(0)
+  notes       String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  olt         OltDevice @relation(fields: [oltId], references: [id])
+  odps        Odp[]
+  splitters   Splitter[]
+
+  @@index([oltId])
+  @@map("odcs")
+}
+
+// ─── Odp ─────────────────────────────────────────────────────────────────────
+/// Optical Distribution Point — the street-level fiber access point
+/// closest to the customer premises.
+model Odp {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @db.VarChar(128)   // e.g. "ODP-A01-01"
+  odcId       String    @db.Uuid
+  address     String?
+  latitude    Decimal?  @db.Decimal(10, 8)
+  longitude   Decimal?  @db.Decimal(11, 8)
+  portCount   Int       @default(0)        // Total ONU capacity
+  usedPorts   Int       @default(0)        // Allocated ports
+  notes       String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  odc         Odc       @relation(fields: [odcId], references: [id])
+  onuDevices  OnuDevice[]
+  splitters   Splitter[]
+
+  @@index([odcId])
+  @@map("odps")
+}
+
+// ─── Splitter ────────────────────────────────────────────────────────────────
+/// Passive optical splitter installed in an ODC or ODP.
+model Splitter {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String       @db.VarChar(64)
+  type        SplitterType
+  odcId       String?      @db.Uuid
+  odpId       String?      @db.Uuid
+  notes       String?
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  odc         Odc?         @relation(fields: [odcId], references: [id])
+  odp         Odp?         @relation(fields: [odpId], references: [id])
+
+  @@index([odcId])
+  @@index([odpId])
+  @@map("splitters")
+}
+
+// ─── FiberRoute ──────────────────────────────────────────────────────────────
+/// A cable route segment documenting the physical fiber installation.
+model FiberRoute {
+  id              String             @id @default(uuid()) @db.Uuid
+  name            String             @db.VarChar(128)
+  type            FiberRouteType
+  material        FiberRouteMaterial @default(SINGLE_MODE_G652D)
+  lengthMeters    Int
+  coreCount       Int                @default(0)
+
+  /// GeoJSON LineString geometry for map display
+  geoPath         Json?
+
+  startPoint      String?            @db.VarChar(128)  // e.g. "OLT-POP-01"
+  endPoint        String?            @db.VarChar(128)  // e.g. "ODC-AREA1-01"
+
+  installedAt     DateTime?
+  notes           String?
+
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([type])
+  @@map("fiber_routes")
+}
+
+
+// =============================================================================
+// ▓▓▓ MODULE 09 — VPN (WireGuard)
+// =============================================================================
+
+// ─── VpnTunnel ───────────────────────────────────────────────────────────────
+/// A WireGuard VPN tunnel (a wg-easy "server" instance or a logical grouping).
+/// All Mikrotik and OLT traffic MUST route through a VPN tunnel.
+model VpnTunnel {
+  id              String          @id @default(uuid()) @db.Uuid
+  name            String          @db.VarChar(128)
+  /// WireGuard server public key
+  serverPublicKey String          @db.VarChar(512)
+  /// wg interface IP range e.g. "10.8.0.0/24"
+  subnetCidr      String          @db.VarChar(18)
+  listenPort      Int             @default(51820)
+  /// Publicly reachable endpoint of the VPN server
+  endpoint        String          @db.VarChar(128)
+  status          VpnTunnelStatus @default(UP)
+  notes           String?
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  peers           VpnPeer[]
+
+  @@map("vpn_tunnels")
+}
+
+// ─── VpnUser ─────────────────────────────────────────────────────────────────
+/// A person (admin / technician) who has a WireGuard client config
+/// for remote access to the operations network.
+model VpnUser {
+  id          String        @id @default(uuid()) @db.Uuid
+  userId      String?       @unique @db.Uuid  // Link to User (optional for service accounts)
+  displayName String        @db.VarChar(128)
+  email       String?       @unique @db.VarChar(255)
+  status      VpnUserStatus @default(ACTIVE)
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  peers       VpnPeer[]
+
+  @@index([status])
+  @@map("vpn_users")
+}
+
+// ─── VpnPeer ─────────────────────────────────────────────────────────────────
+/// A WireGuard peer — one per device or user client.
+model VpnPeer {
+  id              String        @id @default(uuid()) @db.Uuid
+  tunnelId        String        @db.Uuid
+  vpnUserId       String?       @db.Uuid  // Null if this is a device peer
+  displayName     String        @db.VarChar(128)
+  type            VpnPeerType   @default(DEVICE)
+
+  /// Peer's WireGuard public key — must be unique per tunnel
+  publicKey       String        @unique @db.VarChar(512)
+  presharedKey    String?       @db.VarChar(512)
+  /// Allocated IP for this peer e.g. "10.8.0.2/32"
+  allowedIps      String        @db.VarChar(256)
+  /// Remote endpoint if this peer has a fixed address (e.g. Mikrotik with static IP)
+  endpoint        String?       @db.VarChar(128)
+
+  status          VpnUserStatus @default(ACTIVE)
+  lastHandshakeAt DateTime?
+  notes           String?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  tunnel          VpnTunnel     @relation(fields: [tunnelId], references: [id])
+  vpnUser         VpnUser?      @relation(fields: [vpnUserId], references: [id])
+
+  @@index([tunnelId])
+  @@index([vpnUserId])
+  @@index([status])
+  @@map("vpn_peers")
+}
+
+
+// =============================================================================
+// ▓▓▓ MODULE 10 — NOTIFICATION
+// =============================================================================
+
+// ─── NotificationTemplate ────────────────────────────────────────────────────
+/// Reusable message templates with Handlebars-style variable substitution.
+/// Template variables: {{ customerName }}, {{ invoiceNumber }}, {{ dueDate }}, etc.
+model NotificationTemplate {
+  id          String              @id @default(uuid()) @db.Uuid
+  /// Unique event code e.g. INVOICE_ISSUED, TICKET_OPENED, PAYMENT_SUCCESS
+  code        String              @unique @db.VarChar(64)
+  name        String              @db.VarChar(128)
+  channel     NotificationChannel
+  subject     String?             @db.VarChar(255)  // For email
+  bodyHtml    String?             // HTML body (email)
+  bodyText    String              // Plain text / WhatsApp / SMS body
+  isActive    Boolean             @default(true)
+
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@map("notification_templates")
+}
+
+// ─── Notification ────────────────────────────────────────────────────────────
+/// A notification record for delivery tracking.
+/// Queued by business logic (invoice issued, ticket opened, payment received)
+/// and consumed by the notification worker.
+model Notification {
+  id          String              @id @default(uuid()) @db.Uuid
+  userId      String              @db.Uuid
+  templateId  String?             @db.Uuid
+
+  channel     NotificationChannel
+  status      NotificationStatus  @default(PENDING)
+
+  subject     String?             @db.VarChar(255)
+  body        String
+
+  /// Delivery destination
+  toAddress   String?             @db.VarChar(255)  // Email address
+  toPhone     String?             @db.VarChar(20)   // Phone for WhatsApp/SMS
+
+  /// What triggered this notification
+  entityType  String?             @db.VarChar(64)   // "Invoice", "Ticket", etc.
+  entityId    String?             @db.VarChar(128)
+
+  /// Gateway message ID for delivery tracking
+  externalId  String?             @db.VarChar(255)
+
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  readAt      DateTime?
+  errorMsg    String?
+
+  createdAt   DateTime            @default(now())
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([channel])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+
+// =============================================================================
+// ▓▓▓ MODULE 11 — FILES
+// =============================================================================
+
+// ─── FileAsset ───────────────────────────────────────────────────────────────
+/// Central file registry for every uploaded file in the system.
+/// Storage can be local filesystem or S3-compatible object storage.
+/// The actual bytes are never stored in the database — only metadata and path.
+model FileAsset {
+  id           String       @id @default(uuid()) @db.Uuid
+
+  /// Original filename as uploaded by the user
+  originalName String       @db.VarChar(255)
+  /// Sanitised storage filename (UUID-based to prevent collisions)
+  storedName   String       @unique @db.VarChar(255)
+  /// Relative path or S3 key e.g. "uploads/2026/07/uuid.jpg"
+  storagePath  String
+
+  mimeType     String       @db.VarChar(128)
+  sizeBytes    BigInt
+  category     FileCategory @default(OTHER)
+
+  /// SHA-256 hash of file content for deduplication and integrity check
+  checksum     String?      @db.VarChar(64)
+
+  /// Who uploaded the file
+  uploadedById String       @db.Uuid
+
+  /// Optional link to owning entity
+  entityType   String?      @db.VarChar(64)   // "Ticket", "WorkOrder", "Customer"
+  entityId     String?      @db.VarChar(128)
+
+  /// Publicly accessible URL (CDN / signed URL)
+  publicUrl    String?
+
+  createdAt    DateTime     @default(now())
+
+  // Reverse relations — a file can be referenced by multiple entities
+  ticketAttachments  TicketAttachment[]
+  workOrderProofs    WorkOrderProof[]
+  customerDocuments  CustomerDocument[]
+
+  @@index([uploadedById])
+  @@index([entityType, entityId])
+  @@index([category])
+  @@index([createdAt])
+  @@map("file_assets")
+}

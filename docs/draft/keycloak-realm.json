@@ -1,0 +1,317 @@
+{
+  "_comment": "TCU Platform — Keycloak Realm Design DRAFT. STATUS: DRAFT, DO NOT IMPORT TO PRODUCTION.",
+  "_architect": "Identity Architect — 2026-07-14",
+  "_usage": "Use as reference for manual Keycloak realm setup or partial import on staging. Review all passwords and secrets before use.",
+
+  "realm": "tcu-platform",
+  "displayName": "TCU Platform",
+  "displayNameHtml": "<strong>TCU Platform</strong><br/><small>PT Top Class Universal</small>",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
+
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "offlineSessionIdleTimeout": 2592000,
+
+  "passwordPolicy": "length(8) and upperCase(1) and lowerCase(1) and digits(1) and notUsername(undefined)",
+
+  "smtpServer": {
+    "_comment": "Points to local Postfix on VPS host — do not change to external SMTP",
+    "host": "172.17.0.1",
+    "port": "25",
+    "from": "noreply@topclassuniversal.co.id",
+    "fromDisplayName": "TCU Platform",
+    "ssl": "false",
+    "starttls": "false",
+    "auth": "false"
+  },
+
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Full system access — all modules",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "staff",
+        "description": "Operational staff — CRM, billing, ticketing, customers",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "technician",
+        "description": "Field technician — work orders, FTTH, ONT status",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "customer",
+        "description": "End customer — self-service portal only",
+        "composite": false,
+        "clientRole": false
+      }
+    ]
+  },
+
+  "clients": [
+    {
+      "clientId": "tcu-frontend",
+      "_description": "Next.js public browser client — uses PKCE, no client secret",
+      "name": "TCU Frontend Portal",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+
+      "redirectUris": [
+        "https://topclassuniversal.co.id/*",
+        "https://topclassuniversal.co.id/callback",
+        "http://localhost:3001/*",
+        "http://localhost:3001/callback"
+      ],
+      "webOrigins": [
+        "https://topclassuniversal.co.id",
+        "http://localhost:3001"
+      ],
+
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "https://topclassuniversal.co.id/*"
+      },
+
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles",
+        "tcu-claims"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access"
+      ]
+    },
+
+    {
+      "clientId": "tcu-backend",
+      "_description": "Express.js confidential resource server — validates tokens and calls admin APIs",
+      "name": "TCU Backend API",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": true,
+
+      "secret": "REPLACE_WITH_GENERATED_SECRET",
+
+      "serviceAccountRoles": ["admin"],
+
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles",
+        "tcu-claims"
+      ]
+    },
+
+    {
+      "clientId": "tcu-portainer",
+      "_description": "Portainer SSO — staff and admin only",
+      "name": "TCU Portainer",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "secret": "REPLACE_WITH_GENERATED_SECRET",
+      "redirectUris": [
+        "https://portainer.topclassuniversal.co.id/*"
+      ],
+      "webOrigins": [
+        "https://portainer.topclassuniversal.co.id"
+      ]
+    },
+
+    {
+      "clientId": "tcu-grafana",
+      "_description": "Grafana monitoring — admin only",
+      "name": "TCU Grafana",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "secret": "REPLACE_WITH_GENERATED_SECRET",
+      "redirectUris": [
+        "https://grafana.topclassuniversal.co.id/*"
+      ],
+      "webOrigins": [
+        "https://grafana.topclassuniversal.co.id"
+      ]
+    }
+  ],
+
+  "clientScopes": [
+    {
+      "name": "tcu-claims",
+      "_description": "Custom TCU Platform claims — injected into all access tokens",
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "tcu_user_id",
+          "_description": "Maps Keycloak user attribute tcu_user_id to JWT claim",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "tcu_user_id",
+            "claim.name": "tcu_user_id",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "tcu_customer_id",
+          "_description": "Maps to CUST-YYYYMM-XXXX customer_id_string",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "tcu_customer_id",
+            "claim.name": "tcu_customer_id",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm_roles",
+          "_description": "Include realm roles in access token",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        },
+        {
+          "name": "full_name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-full-name-mapper",
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+
+  "authentication": {
+    "_comment": "OTP policy for built-in 2FA. Replaces current bcrypt TOTP + email OTP flows.",
+    "otpPolicy": {
+      "type": "totp",
+      "algorithm": "HmacSHA1",
+      "digits": 6,
+      "period": 30,
+      "initialCounter": 0,
+      "lookAheadWindow": 1
+    },
+    "_flows": [
+      {
+        "alias": "browser",
+        "_description": "Standard browser login — username/password + optional OTP",
+        "steps": [
+          "username-password-form",
+          "otp-form (conditional — required only if OTP configured)"
+        ]
+      }
+    ]
+  },
+
+  "groups": [
+    {
+      "name": "TCU Admins",
+      "realmRoles": ["admin"],
+      "_members": "admin@topclassuniversal.co.id"
+    },
+    {
+      "name": "TCU Staff",
+      "realmRoles": ["staff"]
+    },
+    {
+      "name": "TCU Technicians",
+      "realmRoles": ["technician"]
+    },
+    {
+      "name": "TCU Customers",
+      "realmRoles": ["customer"],
+      "_description": "Default group for self-registered customers"
+    }
+  ],
+
+  "defaultGroups": [
+    "/TCU Customers"
+  ],
+
+  "requiredActions": [
+    {
+      "alias": "VERIFY_EMAIL",
+      "enabled": true,
+      "defaultAction": false
+    },
+    {
+      "alias": "UPDATE_PASSWORD",
+      "enabled": true,
+      "defaultAction": false,
+      "_note": "Set defaultAction to true for migrated users so they reset on first login"
+    },
+    {
+      "alias": "CONFIGURE_TOTP",
+      "enabled": true,
+      "defaultAction": false
+    }
+  ],
+
+  "_token_claims_example": {
+    "_description": "Example decoded JWT access token issued by Keycloak to tcu-frontend",
+    "sub": "3f4a2b1c-uuid-keycloak",
+    "iss": "https://auth.topclassuniversal.co.id/realms/tcu-platform",
+    "aud": "tcu-frontend",
+    "exp": 1784041766,
+    "iat": 1784041466,
+    "email": "budi@gmail.com",
+    "name": "Budi Santoso",
+    "preferred_username": "budi@gmail.com",
+    "roles": ["customer"],
+    "tcu_user_id": "uuid-of-user-row-in-postgresql",
+    "tcu_customer_id": "CUST-202507-0001",
+    "realm_access": {
+      "roles": ["customer", "offline_access", "default-roles-tcu-platform"]
+    }
+  }
+}

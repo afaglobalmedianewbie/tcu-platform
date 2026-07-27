@@ -1,0 +1,73 @@
+version: '3.7'
+
+
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: tcu-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tcu_admin
+      POSTGRES_PASSWORD: tcu_secure_password123
+      POSTGRES_DB: tcu_db
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - tcu_mesh
+
+  backend:
+    build:
+      context: ./tcu-backend
+      dockerfile: Dockerfile
+    container_name: tcu-backend
+    restart: unless-stopped
+    env_file:
+      - ./tcu-backend/.env
+    environment:
+      - DATABASE_URL=postgresql://tcu_admin:tcu_secure_password123@db:5432/tcu_db?schema=public
+      - MAIL_DB_HOST=host.docker.internal
+    ports:
+      - "127.0.0.1:3000:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - db
+    networks:
+      - tcu_mesh
+
+  frontend:
+    build:
+      context: ./frontend_new
+      dockerfile: Dockerfile
+    container_name: tcu-frontend
+    restart: unless-stopped
+    environment:
+      - PORT=3001
+      - BACKEND_URL=http://backend:3000
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      - backend
+    networks:
+      - tcu_mesh
+
+  wiki:
+    build:
+      context: ./tcu-wiki
+      dockerfile: Dockerfile
+    container_name: tcu-wiki
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3002:3002"
+    networks:
+      - tcu_mesh
+
+volumes:
+  pgdata:
+
+networks:
+  tcu_mesh:
+    driver: bridge

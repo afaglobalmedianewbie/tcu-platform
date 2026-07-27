@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TCU Platform - Pusat Bantuan & Wiki</title>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+  <meta name="description" content="Pusat Bantuan dan Standar Operasional (SOP) TCU Platform">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+  <!-- Theme: Dark by default -->
+  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify/lib/themes/vue.css">
+  <style>
+    :root {
+      --theme-color: #2563eb;
+    }
+    body {
+      background-color: #0f1623;
+      color: #cbd5e1;
+    }
+    .app-name-link img {
+      max-width: 150px;
+    }
+    .markdown-section h1, .markdown-section h2, .markdown-section h3, .markdown-section h4 {
+      color: #e2e8f0;
+    }
+    .markdown-section p, .markdown-section li {
+      color: #94a3b8;
+    }
+    .markdown-section a {
+      color: var(--theme-color);
+    }
+    .sidebar {
+      background-color: #1e293b;
+      border-right: 1px solid rgba(255,255,255,0.05);
+    }
+    .sidebar ul li a {
+      color: #cbd5e1;
+    }
+    .sidebar ul li a:hover {
+      color: var(--theme-color);
+    }
+  </style>
+</head>
+<body>
+  <div id="app">Memuat Pusat Bantuan...</div>
+  <script>
+    window.$docsify = {
+      name: 'TCU Wiki & SOP',
+      repo: '',
+      loadSidebar: false,
+      auto2top: true,
+      search: {
+        paths: 'auto',
+        placeholder: 'Cari dokumentasi...',
+        noData: 'Tidak ada hasil.',
+        depth: 6
+      },
+      themeColor: '#2563eb'
+    }
+  </script>
+  <!-- Docsify v4 -->
+  <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
+  <!-- Search Plugin -->
+  <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
+</body>
+</html>

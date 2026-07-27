@@ -1,0 +1,1039 @@
+--
+-- PostgreSQL database dump
+--
+
+\restrict IPSegLaSBzasayYSeMQaQhGanShNcHjl973fLahNF7e3dO8VcfqlTr4fYggmXjW
+
+-- Dumped from database version 15.18
+-- Dumped by pg_dump version 15.18
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: CustStatus; Type: TYPE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TYPE public."CustStatus" AS ENUM (
+    'INSTALLATION',
+    'ACTIVE',
+    'ISOLATED',
+    'TERMINATED'
+);
+
+
+ALTER TYPE public."CustStatus" OWNER TO tcu_admin;
+
+--
+-- Name: InvoiceStatus; Type: TYPE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TYPE public."InvoiceStatus" AS ENUM (
+    'UNPAID',
+    'PAID',
+    'OVERDUE'
+);
+
+
+ALTER TYPE public."InvoiceStatus" OWNER TO tcu_admin;
+
+--
+-- Name: ItemCategory; Type: TYPE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TYPE public."ItemCategory" AS ENUM (
+    'ONT',
+    'ROUTER',
+    'KABEL',
+    'SPLITTER',
+    'TOOLS',
+    'LAINNYA'
+);
+
+
+ALTER TYPE public."ItemCategory" OWNER TO tcu_admin;
+
+--
+-- Name: ItemStatus; Type: TYPE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TYPE public."ItemStatus" AS ENUM (
+    'GUDANG',
+    'DIPINJAM',
+    'TERPASANG',
+    'RUSAK'
+);
+
+
+ALTER TYPE public."ItemStatus" OWNER TO tcu_admin;
+
+--
+-- Name: LeadStatus; Type: TYPE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TYPE public."LeadStatus" AS ENUM (
+    'NEW',
+    'CONTACTED',
+    'SURVEY_SCHEDULED',
+    'SURVEYED',
+    'CONVERTED',
+    'LOST'
+);
+
+
+ALTER TYPE public."LeadStatus" OWNER TO tcu_admin;
+
+--
+-- Name: Role; Type: TYPE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TYPE public."Role" AS ENUM (
+    'ADMIN',
+    'CUSTOMER',
+    'TECHNICIAN',
+    'CS',
+    'NOC',
+    'FINANCE',
+    'SALES'
+);
+
+
+ALTER TYPE public."Role" OWNER TO tcu_admin;
+
+--
+-- Name: TaskType; Type: TYPE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TYPE public."TaskType" AS ENUM (
+    'NEW_INSTALLATION',
+    'REPAIR',
+    'MAINTENANCE'
+);
+
+
+ALTER TYPE public."TaskType" OWNER TO tcu_admin;
+
+--
+-- Name: TicketPriority; Type: TYPE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TYPE public."TicketPriority" AS ENUM (
+    'LOW',
+    'MEDIUM',
+    'HIGH'
+);
+
+
+ALTER TYPE public."TicketPriority" OWNER TO tcu_admin;
+
+--
+-- Name: TicketStatus; Type: TYPE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TYPE public."TicketStatus" AS ENUM (
+    'OPEN',
+    'IN_PROGRESS',
+    'RESOLVED',
+    'CLOSED'
+);
+
+
+ALTER TYPE public."TicketStatus" OWNER TO tcu_admin;
+
+--
+-- Name: WOStatus; Type: TYPE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TYPE public."WOStatus" AS ENUM (
+    'PENDING',
+    'ON_THE_WAY',
+    'IN_PROGRESS',
+    'COMPLETED'
+);
+
+
+ALTER TYPE public."WOStatus" OWNER TO tcu_admin;
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: AuditLog; Type: TABLE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TABLE public."AuditLog" (
+    id text NOT NULL,
+    user_id text,
+    action text NOT NULL,
+    endpoint text NOT NULL,
+    method text NOT NULL,
+    ip_address text,
+    user_agent text,
+    payload text,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+ALTER TABLE public."AuditLog" OWNER TO tcu_admin;
+
+--
+-- Name: CmsSetting; Type: TABLE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TABLE public."CmsSetting" (
+    key text NOT NULL,
+    value jsonb NOT NULL,
+    updated_at timestamp(3) without time zone NOT NULL
+);
+
+
+ALTER TABLE public."CmsSetting" OWNER TO tcu_admin;
+
+--
+-- Name: CustomerProfile; Type: TABLE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TABLE public."CustomerProfile" (
+    id text NOT NULL,
+    "userId" text NOT NULL,
+    customer_id_string text NOT NULL,
+    full_name text NOT NULL,
+    address text NOT NULL,
+    status public."CustStatus" DEFAULT 'INSTALLATION'::public."CustStatus" NOT NULL,
+    mikrotik_ip text,
+    "planId" text NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) without time zone NOT NULL,
+    pppoe_password text,
+    pppoe_username text
+);
+
+
+ALTER TABLE public."CustomerProfile" OWNER TO tcu_admin;
+
+--
+-- Name: InventoryItem; Type: TABLE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TABLE public."InventoryItem" (
+    id text NOT NULL,
+    serial_number text NOT NULL,
+    name text NOT NULL,
+    category public."ItemCategory" DEFAULT 'ONT'::public."ItemCategory" NOT NULL,
+    status public."ItemStatus" DEFAULT 'GUDANG'::public."ItemStatus" NOT NULL,
+    location_pic text,
+    customer_id text,
+    notes text,
+    inbound_date timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) without time zone NOT NULL
+);
+
+
+ALTER TABLE public."InventoryItem" OWNER TO tcu_admin;
+
+--
+-- Name: Invoice; Type: TABLE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TABLE public."Invoice" (
+    id text NOT NULL,
+    "customerId" text NOT NULL,
+    period text NOT NULL,
+    amount numeric(65,30) NOT NULL,
+    due_date timestamp(3) without time zone NOT NULL,
+    status public."InvoiceStatus" DEFAULT 'UNPAID'::public."InvoiceStatus" NOT NULL,
+    payment_method text,
+    paid_at timestamp(3) without time zone,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+ALTER TABLE public."Invoice" OWNER TO tcu_admin;
+
+--
+-- Name: Lead; Type: TABLE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TABLE public."Lead" (
+    id text NOT NULL,
+    full_name text NOT NULL,
+    phone text NOT NULL,
+    address text NOT NULL,
+    kelurahan text,
+    kecamatan text,
+    kota text,
+    notes text,
+    status public."LeadStatus" DEFAULT 'NEW'::public."LeadStatus" NOT NULL,
+    assigned_to text,
+    source text,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) without time zone NOT NULL
+);
+
+
+ALTER TABLE public."Lead" OWNER TO tcu_admin;
+
+--
+-- Name: LoginLog; Type: TABLE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TABLE public."LoginLog" (
+    id text NOT NULL,
+    "userId" text NOT NULL,
+    ip_address text,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+ALTER TABLE public."LoginLog" OWNER TO tcu_admin;
+
+--
+-- Name: NasDevice; Type: TABLE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TABLE public."NasDevice" (
+    id text NOT NULL,
+    router_name text NOT NULL,
+    ip_address text NOT NULL,
+    secret text NOT NULL,
+    timezone text DEFAULT 'Asia/Jakarta'::text NOT NULL,
+    type text DEFAULT 'other'::text NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) without time zone NOT NULL,
+    port text
+);
+
+
+ALTER TABLE public."NasDevice" OWNER TO tcu_admin;
+
+--
+-- Name: SubscriptionPlan; Type: TABLE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TABLE public."SubscriptionPlan" (
+    id text NOT NULL,
+    name text NOT NULL,
+    speed_mbps integer NOT NULL,
+    price numeric(65,30) NOT NULL,
+    mikrotik_profile text,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    features text[],
+    popular boolean DEFAULT false NOT NULL
+);
+
+
+ALTER TABLE public."SubscriptionPlan" OWNER TO tcu_admin;
+
+--
+-- Name: Ticket; Type: TABLE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TABLE public."Ticket" (
+    id text NOT NULL,
+    "customerId" text NOT NULL,
+    subject text NOT NULL,
+    description text NOT NULL,
+    priority public."TicketPriority" DEFAULT 'MEDIUM'::public."TicketPriority" NOT NULL,
+    status public."TicketStatus" DEFAULT 'OPEN'::public."TicketStatus" NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) without time zone NOT NULL
+);
+
+
+ALTER TABLE public."Ticket" OWNER TO tcu_admin;
+
+--
+-- Name: User; Type: TABLE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TABLE public."User" (
+    id text NOT NULL,
+    email text,
+    phone text NOT NULL,
+    password_hash text NOT NULL,
+    role public."Role" DEFAULT 'CUSTOMER'::public."Role" NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) without time zone NOT NULL,
+    "twoFactorEnabled" boolean DEFAULT false NOT NULL,
+    "twoFactorSecret" text,
+    profile_picture text,
+    preferences jsonb,
+    address text,
+    full_name text,
+    username text
+);
+
+
+ALTER TABLE public."User" OWNER TO tcu_admin;
+
+--
+-- Name: WorkOrder; Type: TABLE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TABLE public."WorkOrder" (
+    id text NOT NULL,
+    "technicianId" text NOT NULL,
+    "ticketId" text,
+    "customerId" text NOT NULL,
+    task_type public."TaskType" NOT NULL,
+    status public."WOStatus" DEFAULT 'PENDING'::public."WOStatus" NOT NULL,
+    scheduled timestamp(3) without time zone NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) without time zone NOT NULL
+);
+
+
+ALTER TABLE public."WorkOrder" OWNER TO tcu_admin;
+
+--
+-- Name: _prisma_migrations; Type: TABLE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TABLE public._prisma_migrations (
+    id character varying(36) NOT NULL,
+    checksum character varying(64) NOT NULL,
+    finished_at timestamp with time zone,
+    migration_name character varying(255) NOT NULL,
+    logs text,
+    rolled_back_at timestamp with time zone,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    applied_steps_count integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE public._prisma_migrations OWNER TO tcu_admin;
+
+--
+-- Name: radcheck; Type: TABLE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TABLE public.radcheck (
+    id integer NOT NULL,
+    username character varying(64) DEFAULT ''::character varying NOT NULL,
+    attribute character varying(64) DEFAULT ''::character varying NOT NULL,
+    op character varying(2) DEFAULT '=='::character varying NOT NULL,
+    value character varying(253) DEFAULT ''::character varying NOT NULL
+);
+
+
+ALTER TABLE public.radcheck OWNER TO tcu_admin;
+
+--
+-- Name: radcheck_id_seq; Type: SEQUENCE; Schema: public; Owner: tcu_admin
+--
+
+CREATE SEQUENCE public.radcheck_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.radcheck_id_seq OWNER TO tcu_admin;
+
+--
+-- Name: radcheck_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: tcu_admin
+--
+
+ALTER SEQUENCE public.radcheck_id_seq OWNED BY public.radcheck.id;
+
+
+--
+-- Name: radreply; Type: TABLE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TABLE public.radreply (
+    id integer NOT NULL,
+    username character varying(64) DEFAULT ''::character varying NOT NULL,
+    attribute character varying(64) DEFAULT ''::character varying NOT NULL,
+    op character varying(2) DEFAULT '='::character varying NOT NULL,
+    value character varying(253) DEFAULT ''::character varying NOT NULL
+);
+
+
+ALTER TABLE public.radreply OWNER TO tcu_admin;
+
+--
+-- Name: radreply_id_seq; Type: SEQUENCE; Schema: public; Owner: tcu_admin
+--
+
+CREATE SEQUENCE public.radreply_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.radreply_id_seq OWNER TO tcu_admin;
+
+--
+-- Name: radreply_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: tcu_admin
+--
+
+ALTER SEQUENCE public.radreply_id_seq OWNED BY public.radreply.id;
+
+
+--
+-- Name: radusergroup; Type: TABLE; Schema: public; Owner: tcu_admin
+--
+
+CREATE TABLE public.radusergroup (
+    id integer NOT NULL,
+    username character varying(64) DEFAULT ''::character varying NOT NULL,
+    groupname character varying(64) DEFAULT ''::character varying NOT NULL,
+    priority integer DEFAULT 1 NOT NULL
+);
+
+
+ALTER TABLE public.radusergroup OWNER TO tcu_admin;
+
+--
+-- Name: radusergroup_id_seq; Type: SEQUENCE; Schema: public; Owner: tcu_admin
+--
+
+CREATE SEQUENCE public.radusergroup_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.radusergroup_id_seq OWNER TO tcu_admin;
+
+--
+-- Name: radusergroup_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: tcu_admin
+--
+
+ALTER SEQUENCE public.radusergroup_id_seq OWNED BY public.radusergroup.id;
+
+
+--
+-- Name: radcheck id; Type: DEFAULT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public.radcheck ALTER COLUMN id SET DEFAULT nextval('public.radcheck_id_seq'::regclass);
+
+
+--
+-- Name: radreply id; Type: DEFAULT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public.radreply ALTER COLUMN id SET DEFAULT nextval('public.radreply_id_seq'::regclass);
+
+
+--
+-- Name: radusergroup id; Type: DEFAULT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public.radusergroup ALTER COLUMN id SET DEFAULT nextval('public.radusergroup_id_seq'::regclass);
+
+
+--
+-- Data for Name: AuditLog; Type: TABLE DATA; Schema: public; Owner: tcu_admin
+--
+
+COPY public."AuditLog" (id, user_id, action, endpoint, method, ip_address, user_agent, payload, created_at) FROM stdin;
+4575b047-2055-4aa0-9e8b-cfb902aa8294	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	PUT /api/cms	/api/cms	PUT	162.158.106.126	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36	{"payload":{"rbac_settings":{"ADMIN":["Dashboard","Customers","Leads","Tickets","Finance","Messages","Networking","Scheduling","Inventory","Tariff Plans","Administrasi","Konfigurasi","CMS Web","Webmail","RBAC"],"CS":["Dashboard","Customers","Tickets","Leads","Messages"],"NOC":["Dashboard","Networking","Tickets"],"FINANCE":["Dashboard","Finance","Tariff Plans"],"SALES":["Dashboard","Leads"],"TECHNICIAN":["Dashboard","Inventory","Scheduling","Tickets"],"CUSTOMER":["Dashboard"]}}}	2026-07-10 04:49:14.638
+23ffa02c-87bb-4da1-8f03-75cb06257aa3	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	PUT /api/cms	/api/cms	PUT	104.23.175.20	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36	{"payload":{"landing_heroTitle":"Koneksi Internet<br/><span style=\\"color: var(--primary)\\">Super Cepat & Stabil</span>","landing_heroSubtitle":"Provider Internet Fiber Optic terpercaya di Jawa Barat. Nikmati koneksi internet super cepat mulai dari Rp 155.000/bulan dengan uptime 99.9%.","landing_coverage":"Jaringan Fiber Optic TopClass.id kini hadir di Pangandaran, Banjar, Ciamis, Tasikmalaya, dan Indramayu.","landing_wa":"6282319140858","layanan_internet":"Layanan Internet Fiber super cepat tan	2026-07-10 06:10:27.528
+2c503320-bc4a-4489-b7fe-6657d429ca02	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	POST /api/auth/2fa/generate	/api/auth/2fa/generate	POST	162.158.88.171	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36	{}	2026-07-10 06:14:26.692
+07860d14-487b-4476-b4fb-c8e218dd0f73	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	POST /api/auth/2fa/verify	/api/auth/2fa/verify	POST	172.71.124.185	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36	{"code":"197928"}	2026-07-10 06:15:18.511
+56fde466-639c-41e9-89a2-017b1c7bc588	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	POST /api/auth/2fa/disable	/api/auth/2fa/disable	POST	172.71.152.78	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36	{"code":"732777"}	2026-07-10 06:32:18.045
+b65a7342-5c54-4afa-8be9-02ac4d8aa2ee	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	PUT /api/auth/preferences	/api/auth/preferences	PUT	172.71.152.77	Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36	{"preferences":{"timeout":10}}	2026-07-10 07:38:02.275
+ed32897c-61c1-42fc-a116-56de2dad7ee4	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	PUT /api/admin/users/dc3d0082-86b7-4b9b-891f-9d75c3259e4c/password	/api/admin/users/dc3d0082-86b7-4b9b-891f-9d75c3259e4c/password	PUT	172.70.93.65	Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36	{"password":"admin123"}	2026-07-10 09:19:58.202
+aa9f6317-7320-4eed-add7-4346cacf8071	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	POST /api/auth/2fa/generate	/api/auth/2fa/generate	POST	104.23.175.205	Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36	{}	2026-07-10 14:45:39.911
+eba52983-c88c-4772-ae5b-de5921ac369d	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	POST /api/auth/2fa/verify	/api/auth/2fa/verify	POST	172.71.152.77	Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36	{"code":"583673"}	2026-07-10 14:46:36.135
+2c138dc0-d850-4393-8d12-3173b0a469c0	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	POST /api/auth/2fa/generate	/api/auth/2fa/generate	POST	172.71.152.77	Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36	{}	2026-07-10 15:18:14.416
+876ae26b-6fdb-4dbd-84a9-5aaf85a839b7	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	POST /api/auth/2fa/verify	/api/auth/2fa/verify	POST	172.71.152.77	Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36	{"code":"451880"}	2026-07-10 15:18:56.391
+cab78c50-0274-46fe-a97b-843b2cd4811c	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	POST /api/plans	/api/plans	POST	172.71.152.77	Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36	{"name":"Subu 500","speed_mbps":"500","price":"200000","features":"Untuk kantor besar & kafe, Bandwidth maksimal, SLA 99.9% & IP Publik","popular":true,"mikrotik_profile":"Pakace 500"}	2026-07-10 16:13:12.401
+c407f07f-9545-42ac-9baa-72672b8c52ae	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	POST /api/admin/users	/api/admin/users	POST	162.158.163.209	Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36	{"username":"AztinKetot","password":"aztin123","role":"CS","full_name":"Aztin sanusi","phone":"0876578822","email":"aztinsanusi@topclassuniversal.co.id","address":"Padaherang"}	2026-07-10 16:31:42.572
+65d6fc6a-3bfb-4a15-9ac3-1bf732eb7f73	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	DELETE /api/admin/mail/alias-01	/api/admin/mail/alias-01	DELETE	172.70.93.64	Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36	{}	2026-07-11 16:27:38.423
+\.
+
+
+--
+-- Data for Name: CmsSetting; Type: TABLE DATA; Schema: public; Owner: tcu_admin
+--
+
+COPY public."CmsSetting" (key, value, updated_at) FROM stdin;
+landing_heroTitle	"Koneksi Internet<br/><span style=\\"color: var(--primary)\\">Super Cepat & Stabil</span>"	2026-07-10 06:10:27.454
+layanan_iot	"Solusi Smart Home dan Internet of Things."	2026-07-10 06:10:27.455
+landing_heroSubtitle	"Provider Internet Fiber Optic terpercaya di Jawa Barat. Nikmati koneksi internet super cepat mulai dari Rp 155.000/bulan dengan uptime 99.9%."	2026-07-10 06:10:27.454
+kontak_telepon	"0265-123456"	2026-07-10 06:10:27.456
+kontak_email	"info@topclassuniversal.co.id"	2026-07-10 06:10:27.455
+perusahaan_tentang	"Top Class Universal adalah penyedia layanan internet dan IT profesional."	2026-07-10 06:10:27.455
+kontak_alamat	"Kindo Square Blok B9 Jl. Duren Tiga Raya No. 100 Jakarta Selatan"	2026-07-10 06:10:27.455
+layanan_digital	"Layanan Digital, VPN, dan Cloud Hosting."	2026-07-10 06:10:27.455
+landing_wa	"6282319140858"	2026-07-10 06:10:27.455
+perusahaan_karir	"Bergabunglah dengan tim kami untuk membangun masa depan digital."	2026-07-10 06:10:27.457
+layanan_internet	"Layanan Internet Fiber super cepat tanpa batas kuota."	2026-07-10 06:10:27.456
+landing_coverage	"Jaringan Fiber Optic TopClass.id kini hadir di Pangandaran, Banjar, Ciamis, Tasikmalaya, dan Indramayu."	2026-07-10 06:10:27.455
+rbac_settings	{"CS": ["Dashboard", "Customers", "Tickets", "Leads", "Messages", "Knowledgebase"], "NOC": ["Dashboard", "Networking", "Scheduling", "Tickets", "Knowledgebase"], "ADMIN": ["Dashboard", "Customers", "Leads", "Tickets", "Finance", "Messages", "Networking", "Scheduling", "Inventory", "Tariff Plans", "Administrasi", "Konfigurasi", "CMS Web", "Webmail", "RBAC", "Knowledgebase"], "SALES": ["Dashboard", "Leads", "Customers", "Knowledgebase"], "FINANCE": ["Dashboard", "Finance", "Tariff Plans", "Customers", "Knowledgebase"], "CUSTOMER": [], "TECHNICIAN": ["Dashboard", "Inventory", "Scheduling", "Tickets", "Knowledgebase"]}	2026-07-10 17:10:15.635
+\.
+
+
+--
+-- Data for Name: CustomerProfile; Type: TABLE DATA; Schema: public; Owner: tcu_admin
+--
+
+COPY public."CustomerProfile" (id, "userId", customer_id_string, full_name, address, status, mikrotik_ip, "planId", created_at, updated_at, pppoe_password, pppoe_username) FROM stdin;
+2222ffcf-a76e-4951-b306-9aaf437a85ea	7ce67172-7872-47ca-9c7a-b91d96b009cd	CUST-202607-4183	Adnan Rachmat	Dsn. Padaherang Rt. 007 Rw. 002	INSTALLATION	\N	dead0982-fd06-40b2-bf48-8eb5177f2a23	2026-07-09 21:19:03.214	2026-07-09 21:19:03.214	y2l77oje	CUST-202607-4183@topclass.id
+d677034e-94ed-4e25-ab70-fa9cdeb12a03	8031426d-bc57-4db8-b931-18a151eafa05	CUST-001	Budi Santoso	Jl. Merdeka No 1	ISOLATED	10.0.0.10	dead0982-fd06-40b2-bf48-8eb5177f2a23	2026-07-09 10:38:45.76	2026-07-13 00:30:00.057	\N	\N
+\.
+
+
+--
+-- Data for Name: InventoryItem; Type: TABLE DATA; Schema: public; Owner: tcu_admin
+--
+
+COPY public."InventoryItem" (id, serial_number, name, category, status, location_pic, customer_id, notes, inbound_date, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: Invoice; Type: TABLE DATA; Schema: public; Owner: tcu_admin
+--
+
+COPY public."Invoice" (id, "customerId", period, amount, due_date, status, payment_method, paid_at, created_at) FROM stdin;
+INV-2607-001	d677034e-94ed-4e25-ab70-fa9cdeb12a03	Juli 2026	200000.000000000000000000000000000000	2026-07-12 10:38:45.776	UNPAID	\N	\N	2026-07-09 10:38:45.778
+\.
+
+
+--
+-- Data for Name: Lead; Type: TABLE DATA; Schema: public; Owner: tcu_admin
+--
+
+COPY public."Lead" (id, full_name, phone, address, kelurahan, kecamatan, kota, notes, status, assigned_to, source, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: LoginLog; Type: TABLE DATA; Schema: public; Owner: tcu_admin
+--
+
+COPY public."LoginLog" (id, "userId", ip_address, created_at) FROM stdin;
+ade982cf-2b52-4814-a9bc-9923363edfdc	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.10.13.69	2026-07-09 16:06:42.643
+3612dd0f-b755-49f2-bc23-a5391da07994	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.10.13.69	2026-07-09 16:23:14.825
+6bc20f41-a6e4-459f-b207-761d7d518df2	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.10.13.69	2026-07-09 18:49:07.484
+91a81695-03f2-438f-9916-6756bb8af4d8	7ce67172-7872-47ca-9c7a-b91d96b009cd	114.10.13.69	2026-07-10 00:17:12.575
+4769c0eb-b8e2-4b0d-857b-4002c41dac99	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.10.13.69	2026-07-10 00:18:37.24
+f8567adc-d033-4214-8f9e-f617f01cdbbf	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	172.24.0.1	2026-07-10 04:35:53.661
+cd943b9a-bc8e-4c1d-81bb-293b6ca752d5	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.10.13.69, 162.158.106.127	2026-07-10 04:48:10.428
+ac3c94a8-5500-41d3-828b-a0289b7a68a2	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.10.13.69, 172.71.82.81	2026-07-10 06:32:42.565
+d3104b93-5e08-4967-a5c2-74287320205e	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.10.13.69, 172.71.152.78	2026-07-10 07:36:49.153
+7b3ca854-6155-461e-9550-7a59d6017499	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.10.13.69, 162.158.108.46	2026-07-10 08:50:15.843
+b82e521a-4fe8-4cea-a81d-57e83c764d82	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.10.13.69, 172.70.208.155	2026-07-10 09:04:00.801
+754177ca-07c4-4768-a23e-9c1300c159b4	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.10.13.69, 172.70.208.155	2026-07-10 11:43:59.89
+79f4770b-b83e-41fb-bde7-e32c95ec595d	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.5.212.117, 104.23.175.205	2026-07-10 14:44:24.795
+f70448b0-b6af-4e72-b3dc-123940d35ff2	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.5.212.117, 172.71.152.77	2026-07-10 15:17:58.862
+028f11b0-0ab1-416b-a404-5bc4f1ea9b3a	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.5.212.117, 162.158.170.96	2026-07-10 16:09:49.939
+2f21b427-ba4d-45dd-886c-ef7098c4ca3c	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.5.212.117, 172.71.152.78	2026-07-10 16:51:55.677
+6c7869b1-5597-4e5b-9a92-e3cba48a4cd1	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.5.212.117, 172.69.166.78	2026-07-10 23:56:10.494
+40572829-6ba4-4d23-9278-d5e1ea848ccd	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.5.212.117, 104.22.66.20	2026-07-11 03:55:16.011
+e2ef79a7-3a8c-4d3e-bf8b-eae95ae935f8	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.5.217.163, 104.22.66.20	2026-07-11 15:58:27.48
+0b1a9ffa-9068-4d45-86b3-054f3fcaa041	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.5.217.163, 172.70.208.154	2026-07-11 16:57:45.415
+4e2d748c-90e4-48f5-969d-3952b8c1ebcf	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.5.217.163, 162.158.108.46	2026-07-12 02:27:53.324
+fa219bdf-a65e-4055-b772-87c51ef22cd0	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.5.217.163, 172.70.208.155	2026-07-12 08:23:37.84
+ba3fa417-3b83-44cb-84c9-5f6dc8e87ff1	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.5.248.140, 162.158.108.46	2026-07-13 12:54:48.412
+a43890a4-8aa5-41eb-8ad7-66b66bce7da4	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.5.216.31, 104.23.175.21	2026-07-14 10:26:58.122
+7c1e1b51-e977-4dee-a6e0-bff43eaf78f7	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.5.216.31, 104.23.175.21	2026-07-14 10:47:35.085
+da74f787-535b-4345-b3da-85e234c08ca3	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.5.216.31, 172.70.208.154	2026-07-14 11:30:34.648
+15b3231d-7612-490c-b1f7-4ec8dcbd6a97	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.5.216.31, 162.158.88.171	2026-07-14 12:16:36.879
+4a8a15ee-a0ae-4ad2-af69-aa1f7b8dda76	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.5.249.131, 162.158.108.47	2026-07-14 18:27:54.357
+3e6238cd-48d6-4ca9-b57a-c1576ed2329a	dc3d0082-86b7-4b9b-891f-9d75c3259e4c	114.5.249.131, 172.68.164.103	2026-07-14 21:08:41.411
+\.
+
+
+--
+-- Data for Name: NasDevice; Type: TABLE DATA; Schema: public; Owner: tcu_admin
+--
+
+COPY public."NasDevice" (id, router_name, ip_address, secret, timezone, type, created_at, updated_at, port) FROM stdin;
+\.
+
+
+--
+-- Data for Name: SubscriptionPlan; Type: TABLE DATA; Schema: public; Owner: tcu_admin
+--
+
+COPY public."SubscriptionPlan" (id, name, speed_mbps, price, mikrotik_profile, created_at, features, popular) FROM stdin;
+dead0982-fd06-40b2-bf48-8eb5177f2a23	Starter 20 Mbps	20	200000.000000000000000000000000000000	profile-20m	2026-07-09 10:38:45.748	{"Untuk 1-3 pengguna","Cocok belajar & WFH","Support 24/7"}	f
+73e0bbb1-3ed2-41b3-b93d-d3080689576c	Popular 50 Mbps	50	350000.000000000000000000000000000000	profile-50m	2026-07-09 10:38:45.752	{"Untuk 3-8 pengguna","Streaming HD & Gaming","Bebas FUP"}	t
+02e0896d-b019-470d-871c-5139e9047949	Extreme 200 Mbps	200	1000000.000000000000000000000000000000	extreme-200	2026-07-10 06:02:53.424	{"Untuk kantor besar & kafe","Bandwidth maksimal","SLA 99.9% & IP Publik"}	f
+2f234e0b-d085-49aa-9219-9ce7ec5616c7	Subu 500	500	200000.000000000000000000000000000000	Pakace 500	2026-07-10 16:13:12.34	{"Untuk kantor besar & kafe","Bandwidth maksimal","SLA 99.9% & IP Publik"}	t
+\.
+
+
+--
+-- Data for Name: Ticket; Type: TABLE DATA; Schema: public; Owner: tcu_admin
+--
+
+COPY public."Ticket" (id, "customerId", subject, description, priority, status, created_at, updated_at) FROM stdin;
+TKT-1001	d677034e-94ed-4e25-ab70-fa9cdeb12a03	Internet Putus (LOS Merah)	Lampu modem LOS berkedip merah sejak pagi.	HIGH	OPEN	2026-07-09 10:38:45.782	2026-07-09 10:38:45.782
+\.
+
+
+--
+-- Data for Name: User; Type: TABLE DATA; Schema: public; Owner: tcu_admin
+--
+
+COPY public."User" (id, email, phone, password_hash, role, created_at, updated_at, "twoFactorEnabled", "twoFactorSecret", profile_picture, preferences, address, full_name, username) FROM stdin;
+8031426d-bc57-4db8-b931-18a151eafa05	budi@gmail.com	081300000011	$2b$10$LzAgPUp.97iFkTw4bKT1nOO5OxSG.Hecg.0pABFRIa7/UW9.aFw7C	CUSTOMER	2026-07-09 10:38:45.755	2026-07-09 10:38:45.755	f	\N	\N	\N	\N	\N	\N
+7ce67172-7872-47ca-9c7a-b91d96b009cd	adnan_rachmat@outlook.co.id	087878788886	$2b$12$4CuwoOxIKCm0gBkFDI5ar.IwE2TCEvh/W17C/D/dK27U4UeuA1xrq	CUSTOMER	2026-07-09 21:19:03.214	2026-07-09 21:19:27.217	f	HBGEK2RLIUVXUSSOKVXHUR2BIZ4WGTDO	\N	\N	\N	\N	\N
+6289a432-477a-4cdb-92d4-9e4ce51bb9f7	teknisi@topclassuniversal.co.id	081200000002	$2b$12$nin8/xnQFcoQOqJ59DpRnOHnQajN0PdSmb9yQWXzqpzSalJd.vrMO	TECHNICIAN	2026-07-09 10:38:45.744	2026-07-10 04:27:40.812	f	\N	\N	\N	\N	\N	\N
+dc3d0082-86b7-4b9b-891f-9d75c3259e4c	admin@topclassuniversal.co.id	081200000001	$2b$12$fzRnGhv.OkwNqO7TgZbeD.DJSbAGc9qRwZs2BRsTnPQt7G2.8koWa	ADMIN	2026-07-09 10:38:45.738	2026-07-10 15:18:56.386	t	OM4FCQS2MRSGM6CTM5NDAWSCN5GW2VDU	\N	{"timeout": 10}	\N	\N	\N
+239f79ce-af63-4e8a-b86c-663fae354bd8	aztinsanusi@topclassuniversal.co.id	0876578822	$2b$12$QUMJBdj50QpfDsEvtnqtK.iiqQcpCYrZR.WE5Ycw5YzQWyCsRS0YK	CS	2026-07-10 16:31:42.184	2026-07-10 16:31:42.184	f	\N	\N	\N	Padaherang	Aztin sanusi	AztinKetot
+\.
+
+
+--
+-- Data for Name: WorkOrder; Type: TABLE DATA; Schema: public; Owner: tcu_admin
+--
+
+COPY public."WorkOrder" (id, "technicianId", "ticketId", "customerId", task_type, status, scheduled, created_at, updated_at) FROM stdin;
+WO-1001	6289a432-477a-4cdb-92d4-9e4ce51bb9f7	TKT-1001	d677034e-94ed-4e25-ab70-fa9cdeb12a03	REPAIR	PENDING	2026-07-09 10:38:45.785	2026-07-09 10:38:45.786	2026-07-09 10:38:45.786
+\.
+
+
+--
+-- Data for Name: _prisma_migrations; Type: TABLE DATA; Schema: public; Owner: tcu_admin
+--
+
+COPY public._prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) FROM stdin;
+11b7be3e-233e-4ba6-a5f9-43d36a16626c	8ca339335c9e26aa0e74457148a28a3a73aae00b8b72775240cb7423ad47b8da	2026-07-05 21:01:28.733558+00	20260705210128_init_schema	\N	\N	2026-07-05 21:01:28.605656+00	1
+\.
+
+
+--
+-- Data for Name: radcheck; Type: TABLE DATA; Schema: public; Owner: tcu_admin
+--
+
+COPY public.radcheck (id, username, attribute, op, value) FROM stdin;
+2	CUST-202607-4183@topclass.id	Cleartext-Password	==	y2l77oje
+1	CUST-001@topclass.id	Cleartext-Password	==	admin123
+\.
+
+
+--
+-- Data for Name: radreply; Type: TABLE DATA; Schema: public; Owner: tcu_admin
+--
+
+COPY public.radreply (id, username, attribute, op, value) FROM stdin;
+1	CUST-001@topclass.id	Framed-IP-Address	=	10.0.0.10
+\.
+
+
+--
+-- Data for Name: radusergroup; Type: TABLE DATA; Schema: public; Owner: tcu_admin
+--
+
+COPY public.radusergroup (id, username, groupname, priority) FROM stdin;
+2	CUST-202607-4183@topclass.id	profile-20m	1
+1	CUST-001@topclass.id	profile-20m	1
+\.
+
+
+--
+-- Name: radcheck_id_seq; Type: SEQUENCE SET; Schema: public; Owner: tcu_admin
+--
+
+SELECT pg_catalog.setval('public.radcheck_id_seq', 2, true);
+
+
+--
+-- Name: radreply_id_seq; Type: SEQUENCE SET; Schema: public; Owner: tcu_admin
+--
+
+SELECT pg_catalog.setval('public.radreply_id_seq', 1, true);
+
+
+--
+-- Name: radusergroup_id_seq; Type: SEQUENCE SET; Schema: public; Owner: tcu_admin
+--
+
+SELECT pg_catalog.setval('public.radusergroup_id_seq', 2, true);
+
+
+--
+-- Name: AuditLog AuditLog_pkey; Type: CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."AuditLog"
+    ADD CONSTRAINT "AuditLog_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: CmsSetting CmsSetting_pkey; Type: CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."CmsSetting"
+    ADD CONSTRAINT "CmsSetting_pkey" PRIMARY KEY (key);
+
+
+--
+-- Name: CustomerProfile CustomerProfile_pkey; Type: CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."CustomerProfile"
+    ADD CONSTRAINT "CustomerProfile_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: InventoryItem InventoryItem_pkey; Type: CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."InventoryItem"
+    ADD CONSTRAINT "InventoryItem_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: Invoice Invoice_pkey; Type: CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."Invoice"
+    ADD CONSTRAINT "Invoice_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: Lead Lead_pkey; Type: CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."Lead"
+    ADD CONSTRAINT "Lead_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: LoginLog LoginLog_pkey; Type: CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."LoginLog"
+    ADD CONSTRAINT "LoginLog_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: NasDevice NasDevice_pkey; Type: CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."NasDevice"
+    ADD CONSTRAINT "NasDevice_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: SubscriptionPlan SubscriptionPlan_pkey; Type: CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."SubscriptionPlan"
+    ADD CONSTRAINT "SubscriptionPlan_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: Ticket Ticket_pkey; Type: CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."Ticket"
+    ADD CONSTRAINT "Ticket_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: User User_pkey; Type: CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."User"
+    ADD CONSTRAINT "User_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: WorkOrder WorkOrder_pkey; Type: CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."WorkOrder"
+    ADD CONSTRAINT "WorkOrder_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: _prisma_migrations _prisma_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public._prisma_migrations
+    ADD CONSTRAINT _prisma_migrations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: radcheck radcheck_pkey; Type: CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public.radcheck
+    ADD CONSTRAINT radcheck_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: radreply radreply_pkey; Type: CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public.radreply
+    ADD CONSTRAINT radreply_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: radusergroup radusergroup_pkey; Type: CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public.radusergroup
+    ADD CONSTRAINT radusergroup_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: CustomerProfile_customer_id_string_key; Type: INDEX; Schema: public; Owner: tcu_admin
+--
+
+CREATE UNIQUE INDEX "CustomerProfile_customer_id_string_key" ON public."CustomerProfile" USING btree (customer_id_string);
+
+
+--
+-- Name: CustomerProfile_userId_key; Type: INDEX; Schema: public; Owner: tcu_admin
+--
+
+CREATE UNIQUE INDEX "CustomerProfile_userId_key" ON public."CustomerProfile" USING btree ("userId");
+
+
+--
+-- Name: InventoryItem_serial_number_key; Type: INDEX; Schema: public; Owner: tcu_admin
+--
+
+CREATE UNIQUE INDEX "InventoryItem_serial_number_key" ON public."InventoryItem" USING btree (serial_number);
+
+
+--
+-- Name: NasDevice_ip_address_key; Type: INDEX; Schema: public; Owner: tcu_admin
+--
+
+CREATE UNIQUE INDEX "NasDevice_ip_address_key" ON public."NasDevice" USING btree (ip_address);
+
+
+--
+-- Name: User_email_key; Type: INDEX; Schema: public; Owner: tcu_admin
+--
+
+CREATE UNIQUE INDEX "User_email_key" ON public."User" USING btree (email);
+
+
+--
+-- Name: User_phone_key; Type: INDEX; Schema: public; Owner: tcu_admin
+--
+
+CREATE UNIQUE INDEX "User_phone_key" ON public."User" USING btree (phone);
+
+
+--
+-- Name: User_username_key; Type: INDEX; Schema: public; Owner: tcu_admin
+--
+
+CREATE UNIQUE INDEX "User_username_key" ON public."User" USING btree (username);
+
+
+--
+-- Name: radcheck_username_idx; Type: INDEX; Schema: public; Owner: tcu_admin
+--
+
+CREATE INDEX radcheck_username_idx ON public.radcheck USING btree (username);
+
+
+--
+-- Name: radreply_username_idx; Type: INDEX; Schema: public; Owner: tcu_admin
+--
+
+CREATE INDEX radreply_username_idx ON public.radreply USING btree (username);
+
+
+--
+-- Name: radusergroup_username_idx; Type: INDEX; Schema: public; Owner: tcu_admin
+--
+
+CREATE INDEX radusergroup_username_idx ON public.radusergroup USING btree (username);
+
+
+--
+-- Name: CustomerProfile CustomerProfile_planId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."CustomerProfile"
+    ADD CONSTRAINT "CustomerProfile_planId_fkey" FOREIGN KEY ("planId") REFERENCES public."SubscriptionPlan"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: CustomerProfile CustomerProfile_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."CustomerProfile"
+    ADD CONSTRAINT "CustomerProfile_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."User"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: Invoice Invoice_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."Invoice"
+    ADD CONSTRAINT "Invoice_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public."CustomerProfile"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: LoginLog LoginLog_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."LoginLog"
+    ADD CONSTRAINT "LoginLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."User"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: Ticket Ticket_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."Ticket"
+    ADD CONSTRAINT "Ticket_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public."CustomerProfile"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: WorkOrder WorkOrder_customerId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."WorkOrder"
+    ADD CONSTRAINT "WorkOrder_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public."CustomerProfile"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: WorkOrder WorkOrder_technicianId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."WorkOrder"
+    ADD CONSTRAINT "WorkOrder_technicianId_fkey" FOREIGN KEY ("technicianId") REFERENCES public."User"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: WorkOrder WorkOrder_ticketId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: tcu_admin
+--
+
+ALTER TABLE ONLY public."WorkOrder"
+    ADD CONSTRAINT "WorkOrder_ticketId_fkey" FOREIGN KEY ("ticketId") REFERENCES public."Ticket"(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict IPSegLaSBzasayYSeMQaQhGanShNcHjl973fLahNF7e3dO8VcfqlTr4fYggmXjW
+

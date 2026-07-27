@@ -1,0 +1,8 @@
+{
+  "pre_tool_execution": [
+    {
+      "name": "log-tool-call",
+      "command": "echo 'Tool is about to execute...'"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+#!/usr/bin/expect -f
+set timeout -1
+spawn env DATABASE_URL="postgresql://tcu_staging_user:staging_super_secret_password_123@127.0.0.1:55432/tcu_platform_staging" npx prisma migrate dev --name phase14_business_schema --schema prisma/schema.prisma
+expect {
+    "We need to reset the database" {
+        send "y\r"
+        exp_continue
+    }
+    "Are you sure you want create this new migration" {
+        send "y\r"
+        exp_continue
+    }
+    "Do you want to continue" {
+        send "y\r"
+        exp_continue
+    }
+    eof
+}

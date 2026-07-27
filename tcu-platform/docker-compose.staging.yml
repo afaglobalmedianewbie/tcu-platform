@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # -------------------------------------
+  # 1. Redis (Message Broker / Cache)
+  # -------------------------------------
+  redis-staging:
+    image: redis:7-alpine
+    container_name: tcu-redis-staging
+    restart: unless-stopped
+    ports:
+      - "6380:6379" # Exposing on alternative port to avoid conflict with production
+    volumes:
+      - ./data/staging/redis:/data
+    networks:
+      - tcu-monitoring-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # -------------------------------------
+  # 2. Prometheus (Metrics Time-Series DB)
+  # -------------------------------------
+  prometheus-staging:
+    image: prom/prometheus:latest
+    container_name: tcu-prometheus-staging
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/staging/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./data/staging/prometheus:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - tcu-monitoring-net
+
+  # -------------------------------------
+  # 3. Grafana (Dashboard Analytics)
+  # -------------------------------------
+  grafana-staging:
+    image: grafana/grafana:latest
+    container_name: tcu-grafana-staging
+    restart: unless-stopped
+    ports:
+      - "3005:3000" # Exposing on alternative port to avoid conflict with production UI
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=StagingAdminPass123!
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./data/staging/grafana:/var/lib/grafana
+    networks:
+      - tcu-monitoring-net
+    depends_on:
+      - prometheus-staging
+
+  # -------------------------------------
+  # 4. Portainer (Docker Container Management)
+  # -------------------------------------
+  portainer-staging:
+    image: portainer/portainer-ce:latest
+    container_name: tcu-portainer-staging
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "8000:8000"
+      - "9443:9443" # Portainer web UI (HTTPS)
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro # Read-only access to host docker socket
+      - ./data/staging/portainer:/data
+    networks:
+      - tcu-monitoring-net
+
+networks:
+  tcu-monitoring-net:
+    driver: bridge
+    name: tcu-monitoring-net

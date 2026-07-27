@@ -1,0 +1,451 @@
+// Prisma schema: Phase 1 (production-ready, PostgreSQL, UUID PKs, multi-tenant ready)
+// Notes:
+// - Soft delete uses `deletedAt` (nullable) and `isDeleted` (boolean) for fast filtering/indexing.
+// - Add partial indexes in migrations for `WHERE "isDeleted" = false` or `WHERE "deletedAt" IS NULL` for best performance.
+// - Referential actions set to NoAction for financial records to avoid cascade deletes.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------
+// Common types / enums
+// -----------------------------
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum TicketStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+// -----------------------------
+// Core / Auth
+// -----------------------------
+
+model User {
+  id            String         @id @default(uuid()) @db.Uuid
+  tenantId      String         @db.Uuid
+  email         String         @db.VarChar(255)
+  username      String?        @db.VarChar(100)
+  passwordHash  String?        @db.Text
+  displayName   String?        @db.VarChar(255)
+  isActive      Boolean        @default(true)
+  isDeleted     Boolean        @default(false)
+  deletedAt     DateTime?      @db.Timestamptz(6)
+  createdAt     DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(6)
+
+  // relations
+  roles         UserRole[]
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]     @relation("actor_audit_logs")
+
+  @@index([tenantId])
+  @@index([tenantId, isDeleted])
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+model Role {
+  id          String         @id @default(uuid()) @db.Uuid
+  tenantId    String         @db.Uuid
+  name        String         @db.VarChar(100)
+  description String?        @db.Text
+  isSystem    Boolean        @default(false)
+  isDeleted   Boolean        @default(false)
+  deletedAt   DateTime?      @db.Timestamptz(6)
+  createdAt   DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime       @updatedAt @db.Timestamptz(6)
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, isDeleted])
+  @@map("roles")
+}
+
+model Permission {
+  id          String         @id @default(uuid()) @db.Uuid
+  tenantId    String         @db.Uuid
+  resource    String         @db.VarChar(150)
+  action      String         @db.VarChar(100)
+  description String?        @db.Text
+  createdAt   DateTime       @default(now()) @db.Timestamptz(6)
+
+  roles       RolePermission[]
+
+  @@unique([tenantId, resource, action])
+  @@index([tenantId])
+  @@map("permissions")
+}
+
+model UserRole {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  userId   String @db.Uuid
+  roleId   String @db.Uuid
+
+  user     User   @relation(fields: [userId], references: [id], onDelete: NoAction)
+  role     Role   @relation(fields: [roleId], references: [id], onDelete: NoAction)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([userId, roleId])
+  @@index([tenantId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id           String     @id @default(uuid()) @db.Uuid
+  tenantId     String     @db.Uuid
+  roleId       String     @db.Uuid
+  permissionId String     @db.Uuid
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: NoAction)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: NoAction)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([roleId, permissionId])
+  @@index([tenantId])
+  @@map("role_permissions")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tenantId   String    @db.Uuid
+  tokenHash  String    @db.Text
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+  expiresAt  DateTime? @db.Timestamptz(6)
+  revokedAt  DateTime? @db.Timestamptz(6)
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: NoAction)
+
+  @@index([userId])
+  @@index([tenantId])
+  @@map("refresh_tokens")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @db.Uuid
+  actorId    String?  @db.Uuid
+  actorType  String?  @db.VarChar(50)
+  action     String   @db.VarChar(100)
+  entity     String   @db.VarChar(150)
+  entityId   String?  @db.Uuid
+  changes    Json?
+  note       String?  @db.Text
+  ipAddress  String?  @db.VarChar(50)
+  userAgent  String?  @db.VarChar(512)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  actor      User?    @relation("actor_audit_logs", fields: [actorId], references: [id], onDelete: NoAction)
+
+  @@index([tenantId, entity, entityId])
+  @@map("audit_logs")
+}
+
+// -----------------------------
+// Customers & Contacts
+// -----------------------------
+
+model Customer {
+  id           String              @id @default(uuid()) @db.Uuid
+  tenantId     String              @db.Uuid
+  externalId   String?             @db.VarChar(100) // optional external identifier
+  name         String              @db.VarChar(255)
+  legalName    String?             @db.VarChar(255)
+  taxNumber    String?             @db.VarChar(100)
+  isActive     Boolean             @default(true)
+  isDeleted    Boolean             @default(false)
+  deletedAt    DateTime?           @db.Timestamptz(6)
+  createdAt    DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime            @updatedAt @db.Timestamptz(6)
+
+  addresses    CustomerAddress[]
+  contacts     CustomerContact[]
+  documents    CustomerDocument[]
+  services     CustomerService[]
+  invoices     Invoice[]
+
+  @@unique([tenantId, externalId])
+  @@index([tenantId, isDeleted])
+  @@map("customers")
+}
+
+model CustomerAddress {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  customerId  String   @db.Uuid
+  label       String?  @db.VarChar(100)
+  line1       String   @db.VarChar(255)
+  line2       String?  @db.VarChar(255)
+  city        String?  @db.VarChar(100)
+  state       String?  @db.VarChar(100)
+  postalCode  String?  @db.VarChar(50)
+  country     String?  @db.VarChar(100)
+  isPrimary   Boolean  @default(false)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: NoAction)
+
+  @@index([customerId])
+  @@index([tenantId])
+  @@map("customer_addresses")
+}
+
+model CustomerContact {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @db.Uuid
+  customerId String   @db.Uuid
+  name       String   @db.VarChar(255)
+  role       String?  @db.VarChar(100)
+  phone      String?  @db.VarChar(50)
+  email      String?  @db.VarChar(255)
+  preferred  String?  @db.VarChar(50)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: NoAction)
+
+  @@index([customerId])
+  @@index([tenantId])
+  @@map("customer_contacts")
+}
+
+model CustomerDocument {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  customerId  String   @db.Uuid
+  docType     String   @db.VarChar(100)
+  filename    String   @db.VarChar(255)
+  url         String?  @db.Text
+  metadata    Json?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: NoAction)
+
+  @@index([customerId])
+  @@index([tenantId])
+  @@map("customer_documents")
+}
+
+// -----------------------------
+// Services & Packages
+// -----------------------------
+
+model ServicePackage {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  code        String   @db.VarChar(100)
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  priceCents  Int      @default(0)
+  currency    String   @db.VarChar(10) @default("IDR")
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  customerServices CustomerService[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("service_packages")
+}
+
+model CustomerService {
+  id               String         @id @default(uuid()) @db.Uuid
+  tenantId         String         @db.Uuid
+  customerId       String         @db.Uuid
+  servicePackageId String         @db.Uuid
+  startDate        DateTime?
+  endDate          DateTime?
+  status           String         @db.VarChar(50)
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+
+  customer         Customer       @relation(fields: [customerId], references: [id], onDelete: NoAction)
+  servicePackage   ServicePackage @relation(fields: [servicePackageId], references: [id], onDelete: NoAction)
+
+  @@index([customerId])
+  @@index([tenantId])
+  @@map("customer_services")
+}
+
+// -----------------------------
+// Billing / Financial (no cascade deletes)
+// -----------------------------
+
+model Invoice {
+  id          String       @id @default(uuid()) @db.Uuid
+  tenantId    String       @db.Uuid
+  customerId  String       @db.Uuid
+  invoiceNo   String       @db.VarChar(100)
+  date        DateTime     @db.Timestamptz(6)
+  dueDate     DateTime?    @db.Timestamptz(6)
+  totalCents  Int          @default(0)
+  currency    String       @db.VarChar(10) @default("IDR")
+  status      PaymentStatus @default(PENDING)
+  isDeleted   Boolean      @default(false)
+  deletedAt   DateTime?    @db.Timestamptz(6)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(6)
+
+  customer    Customer     @relation(fields: [customerId], references: [id], onDelete: NoAction)
+  items       InvoiceItem[]
+  payments    Payment[]
+
+  @@unique([tenantId, invoiceNo])
+  @@index([tenantId, customerId])
+  @@index([tenantId, isDeleted])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id         String   @id @default(uuid()) @db.Uuid
+  invoiceId  String   @db.Uuid
+  tenantId   String   @db.Uuid
+  description String  @db.Text
+  quantity   Int      @default(1)
+  unitCents  Int      @default(0)
+  totalCents Int      @default(0)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  invoice    Invoice  @relation(fields: [invoiceId], references: [id], onDelete: NoAction)
+
+  @@index([invoiceId])
+  @@index([tenantId])
+  @@map("invoice_items")
+}
+
+model Payment {
+  id             String        @id @default(uuid()) @db.Uuid
+  tenantId       String        @db.Uuid
+  invoiceId      String?       @db.Uuid
+  amountCents     Int          @default(0)
+  currency       String        @db.VarChar(10) @default("IDR")
+  paidAt         DateTime?     @db.Timestamptz(6)
+  status         PaymentStatus @default(PENDING)
+  methodId       String?       @db.Uuid
+  externalRef    String?       @db.VarChar(255)
+  isDeleted      Boolean       @default(false)
+  deletedAt      DateTime?     @db.Timestamptz(6)
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+
+  invoice        Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: NoAction)
+  method         PaymentMethod? @relation(fields: [methodId], references: [id], onDelete: NoAction)
+  logs           PaymentLog[]
+
+  @@index([tenantId, invoiceId])
+  @@index([tenantId, isDeleted])
+  @@map("payments")
+}
+
+model PaymentMethod {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  name        String   @db.VarChar(100)
+  provider    String?  @db.VarChar(100)
+  config      Json?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  payments    Payment[]
+
+  @@index([tenantId])
+  @@map("payment_methods")
+}
+
+model PaymentLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @db.Uuid
+  paymentId  String   @db.Uuid
+  level      String   @db.VarChar(20)
+  message    String   @db.Text
+  meta       Json?
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  payment    Payment  @relation(fields: [paymentId], references: [id], onDelete: NoAction)
+
+  @@index([paymentId])
+  @@index([tenantId])
+  @@map("payment_logs")
+}
+
+// -----------------------------
+// Support / Tickets
+// -----------------------------
+
+model Ticket {
+  id         String          @id @default(uuid()) @db.Uuid
+  tenantId   String          @db.Uuid
+  customerId String?         @db.Uuid
+  subject    String          @db.VarChar(500)
+  description String?        @db.Text
+  status     TicketStatus    @default(OPEN)
+  priority   Int             @default(0)
+  assignedTo String?         @db.Uuid
+  isDeleted  Boolean         @default(false)
+  deletedAt  DateTime?       @db.Timestamptz(6)
+  createdAt  DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime        @updatedAt @db.Timestamptz(6)
+
+  customer   Customer?       @relation(fields: [customerId], references: [id], onDelete: NoAction)
+  comments   TicketComment[]
+  attachments TicketAttachment[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, isDeleted])
+  @@map("tickets")
+}
+
+model TicketComment {
+  id        String   @id @default(uuid()) @db.Uuid
+  ticketId  String   @db.Uuid
+  authorId  String?  @db.Uuid
+  body      String   @db.Text
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: NoAction)
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: NoAction)
+
+  @@index([ticketId])
+  @@map("ticket_comments")
+}
+
+model TicketAttachment {
+  id         String   @id @default(uuid()) @db.Uuid
+  ticketId   String   @db.Uuid
+  filename   String   @db.VarChar(255)
+  url        String?  @db.Text
+  metadata   Json?
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: NoAction)
+
+  @@index([ticketId])
+  @@map("ticket_attachments")
+}
+
+// -----------------------------
+// Notes for DB Admin / Migration
+// -----------------------------
+// 1. Create partial indexes in a manual migration for faster queries excluding soft-deleted rows. Examples:
+//    CREATE INDEX idx_customers_active ON customers ("tenantId") WHERE "isDeleted" = false;
+//    CREATE INDEX idx_invoices_active ON invoices ("tenantId", "customerId") WHERE "isDeleted" = false;
+// 2. Ensure foreign key referential actions are set as intended in migrations (Prisma translates onDelete directives).
+// 3. Add GIN indexes on JSONB columns if you will query them: e.g. CREATE INDEX ON audit_logs USING GIN (changes jsonb_path_ops);
+// 4. For heavy-read access patterns, consider read replicas and connection pooling (pgbouncer).
+// 5. Review retention/archival strategy for financial and audit data; do NOT cascade delete — prefer marking deleted and archival tables.
+

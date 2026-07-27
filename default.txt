@@ -1,0 +1,3 @@
+default._domainkey	IN	TXT	( "v=DKIM1; h=sha256; k=rsa; "
+	  "p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyPJ5Z2ExBpW6gEJ1jsAFfFgUKR4suGe3vaKx4HuX3e7Hmklr+prxLQZkmnWcBOJNK4k45/n/Qtcf3KsUU5k/WQccHooaXy2qxOpC7qcnB/A7FrOGQN+VDqDa+E8l9musqBdU3rHxIm1lvDyBXpdC88YiSZvz72zzSBKZ8ZnRQXAUHL3CQ6/d+RywkLu3WzSl3OJBjO50KmyENs"
+	  "/IOq+Pcedun3BDYx9EI1SJwwTHeMggZjF2V/jZ9bWB1L/Qq/hLZqrtdE3h4Vs+buFwpuu4telrGVaiAXo1hz4NMFP6OonI8NHZFIEqekOTGmh6FL6kfu9a3Ru+093CqnVgYwtdbQIDAQAB" )  ; ----- DKIM key default for topclassuniversal.co.id

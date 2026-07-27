@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "copilot-mcp-server": {
+      "command": "python3",
+      "args": [
+        "/home/tcu/copilot-mcp-server/main.py"
+      ],
+      "env": {
+        "COPILOT_GITHUB_TOKEN": "YOUR_COPILOT_GITHUB_TOKEN"
+      }
+    }
+  }
+}

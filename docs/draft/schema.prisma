@@ -1,0 +1,930 @@
+// =============================================================================
+// TCU Platform — Prisma Schema DRAFT v2.0
+// File: /home/tcu/docs/draft/schema.prisma
+//
+// STATUS: DRAFT — FOR REVIEW ONLY. DO NOT RUN MIGRATION ON PRODUCTION.
+//
+// Architecture: Senior Database Architect
+// Date:         2026-07-14
+// Target DB:    PostgreSQL 16 (upgrade from 15)
+//
+// Backward-compatible with existing server.js production models:
+//   User, CustomerProfile, SubscriptionPlan, Invoice, Ticket, WorkOrder,
+//   RadCheck, RadReply, RadUserGroup, AuditLog, LoginLog
+//
+// New in this draft:
+//   Role, Permission, OltDevice, OntDevice, VpnPeer, Notification,
+//   FileAttachment, TicketMessage, Payment, Lead, Opportunity,
+//   RadAcct, RadNas, CronJobLog
+// =============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum UserSystemRole {
+  ADMIN
+  STAFF
+  TECHNICIAN
+  CUSTOMER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  SURVEY_SCHEDULED
+  PROPOSAL_SENT
+  CONVERTED
+  LOST
+}
+
+enum LeadSource {
+  WEBSITE
+  REFERRAL
+  WALK_IN
+  SOCIAL_MEDIA
+  TELEMARKETING
+  OTHER
+}
+
+enum CustomerStatus {
+  INSTALLATION
+  ACTIVE
+  ISOLATED
+  SUSPENDED
+  TERMINATED
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PAID
+  OVERDUE
+  CANCELLED
+  WAIVED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  XENDIT
+  MIDTRANS
+  QRIS
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_PARTS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketCategory {
+  GANGGUAN_INTERNET
+  GANGGUAN_PERANGKAT
+  BILLING
+  UPGRADE_DOWNGRADE
+  PEMASANGAN_BARU
+  RELOKASI
+  PERTANYAAN_UMUM
+  LAINNYA
+}
+
+enum WorkOrderType {
+  NEW_INSTALLATION
+  REPAIR
+  UPGRADE
+  DOWNGRADE
+  SURVEY
+  RELOCATION
+  EQUIPMENT_RETRIEVAL
+}
+
+enum WorkOrderStatus {
+  PENDING
+  ASSIGNED
+  ON_SITE
+  DONE
+  CANCELLED
+}
+
+enum OntStatus {
+  ONLINE
+  OFFLINE
+  LOS
+  ROGUE
+  UNKNOWN
+}
+
+enum VpnPeerStatus {
+  ACTIVE
+  DISABLED
+  REVOKED
+}
+
+enum NotificationChannel {
+  EMAIL
+  WHATSAPP
+  IN_APP
+  SMS
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  READ
+}
+
+// =============================================================================
+// MODULE: USERS & IAM
+// =============================================================================
+
+model User {
+  id        String         @id @default(uuid()) @db.Uuid
+  email     String         @unique @db.VarChar(255)
+  phone     String?        @unique @db.VarChar(20)
+  username  String?        @unique @db.VarChar(64)
+  full_name String?        @db.VarChar(255)
+  address   String?
+
+  // Legacy bcrypt auth — nulled after Keycloak migration Phase 3
+  password_hash    String?
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret  String?
+
+  // Keycloak SSO — populated during migration, never by seeder
+  keycloak_id String? @unique @db.VarChar(255)
+
+  // Authorization
+  system_role UserSystemRole @default(CUSTOMER)
+  status      UserStatus     @default(ACTIVE)
+
+  // Profile
+  profile_picture String?
+  preferences     Json?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  customerProfile    CustomerProfile?
+  userRoles          UserRole[]
+  loginLogs          LoginLog[]
+  auditLogs          AuditLog[]
+  assignedTickets    Ticket[]         @relation("TicketAssignee")
+  ticketMessages     TicketMessage[]
+  createdWorkOrders  WorkOrder[]      @relation("WOCreatedBy")
+  assignedWorkOrders WorkOrder[]      @relation("WOAssignedTo")
+  notifications      Notification[]
+
+  @@index([email])
+  @@index([system_role])
+  @@index([status])
+  @@map("users")
+}
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(64)
+  description String?
+  is_system   Boolean  @default(false)
+  created_at  DateTime @default(now())
+
+  userRoles   UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          Int    @id @default(autoincrement())
+  action      String @unique @db.VarChar(128)
+  // Format: "<module>:<action>"  e.g. "billing:read", "customers:delete"
+  module      String @db.VarChar(64)
+  description String?
+
+  roles RolePermission[]
+
+  @@index([module])
+  @@map("permissions")
+}
+
+model UserRole {
+  user_id    String   @db.Uuid
+  role_id    Int
+  granted_at DateTime @default(now())
+  granted_by String?  @db.Uuid
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, role_id])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  role_id       Int
+  permission_id Int
+
+  role       Role       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, permission_id])
+  @@map("role_permissions")
+}
+
+// =============================================================================
+// MODULE: AUDIT LOGS & SECURITY
+// =============================================================================
+
+model AuditLog {
+  id             BigInt   @id @default(autoincrement())
+  user_id        String?  @db.Uuid
+  entity_type    String?  @db.VarChar(64)
+  entity_id      String?  @db.VarChar(128)
+  action         String   @db.VarChar(128)
+  endpoint       String?  @db.VarChar(255)
+  method         String?  @db.VarChar(10)
+  previous_state Json?
+  new_state      Json?
+  payload        String?
+  ip_address     String?  @db.VarChar(45)
+  user_agent     String?  @db.VarChar(512)
+  created_at     DateTime @default(now())
+
+  user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id])
+  @@index([created_at])
+  @@index([entity_type, entity_id])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+model LoginLog {
+  id         BigInt   @id @default(autoincrement())
+  user_id    String   @db.Uuid
+  ip_address String?  @db.VarChar(45)
+  user_agent String?  @db.VarChar(512)
+  // Method: PASSWORD | TOTP | EMAIL_OTP | KEYCLOAK | API_KEY
+  method     String   @default("PASSWORD") @db.VarChar(32)
+  success    Boolean  @default(true)
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([created_at])
+  @@map("login_logs")
+}
+
+// =============================================================================
+// MODULE: CRM — LEADS & OPPORTUNITIES
+// =============================================================================
+
+model Lead {
+  id            String     @id @default(uuid()) @db.Uuid
+  name          String     @db.VarChar(255)
+  phone         String     @db.VarChar(20)
+  email         String?    @db.VarChar(255)
+  address       String?
+  city          String?    @db.VarChar(128)
+  source        LeadSource @default(WEBSITE)
+  status        LeadStatus @default(NEW)
+  notes         String?
+
+  latitude          Decimal? @db.Decimal(10, 8)
+  longitude         Decimal? @db.Decimal(11, 8)
+  assigned_staff_id String?  @db.Uuid
+
+  converted_at DateTime?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  customer_profile_id String?          @unique @db.Uuid
+  customerProfile     CustomerProfile? @relation(fields: [customer_profile_id], references: [id])
+
+  opportunities Opportunity[]
+
+  @@index([status])
+  @@index([assigned_staff_id])
+  @@map("leads")
+}
+
+model Opportunity {
+  id               String   @id @default(uuid()) @db.Uuid
+  lead_id          String   @db.Uuid
+  plan_id          String?  @db.Uuid
+  estimated_value  Decimal  @db.Decimal(12, 2)
+  stage            String   @db.VarChar(64)
+  probability      Int      @default(50)
+  expected_close   DateTime?
+  notes            String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  lead Lead             @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+  plan SubscriptionPlan? @relation(fields: [plan_id], references: [id])
+
+  @@index([lead_id])
+  @@map("opportunities")
+}
+
+// =============================================================================
+// MODULE: CUSTOMERS
+// =============================================================================
+
+model CustomerProfile {
+  id                 String         @id @default(uuid()) @db.Uuid
+  customer_id_string String         @unique @db.VarChar(32)
+
+  user_id String @unique @db.Uuid
+  user    User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  full_name       String  @db.VarChar(255)
+  identity_number String? @db.VarChar(20)
+  phone           String? @db.VarChar(20)
+  email           String? @db.VarChar(255)
+
+  address     String?
+  city        String? @db.VarChar(128)
+  province    String? @db.VarChar(128)
+  postal_code String? @db.VarChar(10)
+  rt_rw       String? @db.VarChar(20)
+
+  latitude  Decimal? @db.Decimal(10, 8)
+  longitude Decimal? @db.Decimal(11, 8)
+
+  status  CustomerStatus @default(INSTALLATION)
+  plan_id String?        @db.Uuid
+
+  // PPPoE (synced to RADIUS radcheck)
+  pppoe_username String? @unique @db.VarChar(64)
+  pppoe_password String? @db.VarChar(64)
+
+  // Static IP (synced to RADIUS radreply)
+  mikrotik_ip String? @db.VarChar(15)
+
+  referral_code String? @db.VarChar(32)
+  referred_by   String? @db.Uuid
+
+  joined_at  DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  plan          SubscriptionPlan? @relation(fields: [plan_id], references: [id])
+  lead          Lead?
+  subscriptions Subscription[]
+  invoices      Invoice[]
+  payments      Payment[]
+  tickets       Ticket[]
+  workOrders    WorkOrder[]
+
+  @@index([status])
+  @@index([plan_id])
+  @@map("customer_profiles")
+}
+
+// =============================================================================
+// MODULE: SERVICE PACKAGES
+// =============================================================================
+
+model SubscriptionPlan {
+  id   String @id @default(uuid()) @db.Uuid
+  name String @db.VarChar(128)
+
+  speed_mbps  Int
+  upload_mbps Int     @default(0)
+  has_fup     Boolean @default(false)
+  fup_limit_gb Int?
+
+  price     Decimal @db.Decimal(12, 2)
+  setup_fee Decimal @db.Decimal(12, 2) @default(0)
+
+  mikrotik_profile   String? @db.VarChar(64)
+  features           String[]
+  popular            Boolean @default(false)
+  billing_cycle_days Int     @default(30)
+
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  customers     CustomerProfile[]
+  subscriptions Subscription[]
+  opportunities Opportunity[]
+
+  @@index([is_active])
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id          String             @id @default(uuid()) @db.Uuid
+  customer_id String             @db.Uuid
+  plan_id     String             @db.Uuid
+  status      SubscriptionStatus @default(PENDING)
+
+  activation_date    DateTime?
+  next_billing_date  DateTime?
+  expiry_date        DateTime?
+  suspended_at       DateTime?
+  suspended_reason   String?
+  terminated_at      DateTime?
+  termination_reason String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  customer  CustomerProfile  @relation(fields: [customer_id], references: [id])
+  plan      SubscriptionPlan @relation(fields: [plan_id], references: [id])
+  ontDevice OntDevice?
+  invoices  Invoice[]
+
+  @@index([customer_id])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+// =============================================================================
+// MODULE: BILLING & PAYMENTS
+// =============================================================================
+
+model Invoice {
+  id String @id @db.VarChar(32)
+  // Format: INV-YYYYMM-XXXX
+
+  customer_id     String  @db.Uuid
+  subscription_id String? @db.Uuid
+
+  period       String  @db.VarChar(32)
+  amount       Decimal @db.Decimal(12, 2)
+  tax_amount   Decimal @db.Decimal(12, 2) @default(0)
+  total_amount Decimal @db.Decimal(12, 2) @default(0)
+
+  issue_date DateTime @default(now())
+  due_date   DateTime
+  paid_at    DateTime?
+
+  status InvoiceStatus @default(UNPAID)
+
+  payment_method String? @db.VarChar(32)
+  payment_ref    String? @db.VarChar(255)
+  payment_url    String?
+  notes          String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  customer     CustomerProfile @relation(fields: [customer_id], references: [id])
+  subscription Subscription?   @relation(fields: [subscription_id], references: [id])
+  items        InvoiceItem[]
+  payments     Payment[]
+
+  @@index([customer_id])
+  @@index([status])
+  @@index([due_date])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String  @id @default(uuid()) @db.Uuid
+  invoice_id  String  @db.VarChar(32)
+  description String  @db.VarChar(255)
+  quantity    Int     @default(1)
+  unit_price  Decimal @db.Decimal(12, 2)
+  amount      Decimal @db.Decimal(12, 2)
+
+  invoice Invoice @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
+
+  @@map("invoice_items")
+}
+
+model Payment {
+  id          String        @id @default(uuid()) @db.Uuid
+  invoice_id  String        @db.VarChar(32)
+  customer_id String        @db.Uuid
+  amount      Decimal       @db.Decimal(12, 2)
+  method      PaymentMethod
+  status      PaymentStatus @default(PENDING)
+
+  reference_number String? @db.VarChar(255)
+  gateway_response Json?
+  notes            String?
+
+  paid_at    DateTime?
+  created_at DateTime  @default(now())
+
+  invoice  Invoice         @relation(fields: [invoice_id], references: [id])
+  customer CustomerProfile @relation(fields: [customer_id], references: [id])
+
+  @@index([invoice_id])
+  @@index([customer_id])
+  @@index([status])
+  @@map("payments")
+}
+
+// =============================================================================
+// MODULE: TICKETS
+// =============================================================================
+
+model Ticket {
+  id String @id @db.VarChar(32)
+  // Format: TKT-YYYYMM-XXXX
+
+  customer_id String  @db.Uuid
+  assignee_id String? @db.Uuid
+
+  subject     String         @db.VarChar(255)
+  description String?
+  category    TicketCategory @default(GANGGUAN_INTERNET)
+  priority    TicketPriority @default(MEDIUM)
+  status      TicketStatus   @default(OPEN)
+
+  sla_deadline       DateTime?
+  first_response_at  DateTime?
+  resolved_at        DateTime?
+  closed_at          DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  customer  CustomerProfile @relation(fields: [customer_id], references: [id])
+  assignee  User?           @relation("TicketAssignee", fields: [assignee_id], references: [id])
+  messages  TicketMessage[]
+  workOrder WorkOrder?
+
+  @@index([customer_id])
+  @@index([status])
+  @@index([assignee_id])
+  @@index([created_at])
+  @@map("tickets")
+}
+
+model TicketMessage {
+  id          String   @id @default(uuid()) @db.Uuid
+  ticket_id   String   @db.VarChar(32)
+  sender_id   String   @db.Uuid
+  is_staff    Boolean  @default(false)
+  message     String
+  attachments String[]
+  created_at  DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  sender User   @relation(fields: [sender_id], references: [id])
+
+  @@index([ticket_id])
+  @@map("ticket_messages")
+}
+
+// =============================================================================
+// MODULE: WORK ORDERS
+// =============================================================================
+
+model WorkOrder {
+  id String @id @db.VarChar(32)
+  // Format: WO-YYYYMM-XXXX
+
+  type   WorkOrderType   @default(NEW_INSTALLATION)
+  status WorkOrderStatus @default(PENDING)
+
+  notes            String?
+  scheduled        DateTime?
+  completed_at     DateTime?
+  site_address     String?
+  latitude         Decimal?  @db.Decimal(10, 8)
+  longitude        Decimal?  @db.Decimal(11, 8)
+  technician_notes String?
+  equipment_used   String?
+
+  customer_id   String  @db.Uuid
+  created_by_id String  @db.Uuid
+  technician_id String? @db.Uuid
+  ticket_id     String? @unique @db.VarChar(32)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  customer    CustomerProfile @relation(fields: [customer_id], references: [id])
+  createdBy   User            @relation("WOCreatedBy", fields: [created_by_id], references: [id])
+  technician  User?           @relation("WOAssignedTo", fields: [technician_id], references: [id])
+  ticket      Ticket?         @relation(fields: [ticket_id], references: [id])
+
+  @@index([technician_id])
+  @@index([status])
+  @@index([customer_id])
+  @@map("work_orders")
+}
+
+// =============================================================================
+// MODULE: RADIUS — FreeRADIUS Integration
+// NOTE: Column names must NOT be changed (FreeRADIUS expects exact names).
+// =============================================================================
+
+model RadCheck {
+  id        Int    @id @default(autoincrement())
+  username  String @default("") @db.VarChar(64)
+  attribute String @default("") @db.VarChar(64)
+  op        String @default("==") @db.VarChar(2)
+  value     String @default("") @db.VarChar(253)
+
+  @@index([username])
+  @@map("radcheck")
+}
+
+model RadReply {
+  id        Int    @id @default(autoincrement())
+  username  String @default("") @db.VarChar(64)
+  attribute String @default("") @db.VarChar(64)
+  op        String @default("=") @db.VarChar(2)
+  value     String @default("") @db.VarChar(253)
+
+  @@index([username])
+  @@map("radreply")
+}
+
+model RadUserGroup {
+  id        Int    @id @default(autoincrement())
+  username  String @default("") @db.VarChar(64)
+  groupname String @default("") @db.VarChar(64)
+  priority  Int    @default(1)
+
+  @@index([username])
+  @@map("radusergroup")
+}
+
+model RadGroupCheck {
+  id        Int    @id @default(autoincrement())
+  groupname String @default("") @db.VarChar(64)
+  attribute String @default("") @db.VarChar(64)
+  op        String @default("==") @db.VarChar(2)
+  value     String @default("") @db.VarChar(253)
+
+  @@index([groupname])
+  @@map("radgroupcheck")
+}
+
+model RadGroupReply {
+  id        Int    @id @default(autoincrement())
+  groupname String @default("") @db.VarChar(64)
+  attribute String @default("") @db.VarChar(64)
+  op        String @default("=") @db.VarChar(2)
+  value     String @default("") @db.VarChar(253)
+
+  @@index([groupname])
+  @@map("radgroupreply")
+}
+
+model RadNas {
+  id          Int     @id @default(autoincrement())
+  nasname     String  @db.VarChar(128)
+  shortname   String  @db.VarChar(32)
+  type        String  @default("other") @db.VarChar(30)
+  ports       Int?
+  secret      String  @db.VarChar(60)
+  server      String? @db.VarChar(64)
+  community   String? @db.VarChar(50)
+  description String? @db.VarChar(200)
+
+  @@map("nas")
+}
+
+model RadAcct {
+  radacctid         BigInt    @id @default(autoincrement())
+  acctsessionid     String    @db.VarChar(64)
+  acctuniqueid      String    @unique @db.VarChar(32)
+  username          String    @db.VarChar(64)
+  realm             String?   @db.VarChar(64)
+  nasipaddress      String    @db.VarChar(15)
+  nasportid         String?   @db.VarChar(15)
+  nasporttype       String?   @db.VarChar(32)
+  acctstarttime     DateTime?
+  acctupdatetime    DateTime?
+  acctstoptime      DateTime?
+  acctinterval      Int?
+  acctsessiontime   Int?
+  acctauthentic     String?   @db.VarChar(32)
+  acctinputoctets   BigInt?
+  acctoutputoctets  BigInt?
+  calledstationid   String?   @db.VarChar(50)
+  callingstationid  String?   @db.VarChar(50)
+  acctterminatecause String?  @db.VarChar(32)
+  servicetype       String?   @db.VarChar(32)
+  framedprotocol    String?   @db.VarChar(32)
+  framedipaddress   String?   @db.VarChar(15)
+
+  @@index([username])
+  @@index([acctstarttime])
+  @@index([nasipaddress])
+  @@map("radacct")
+}
+
+// =============================================================================
+// MODULE: FTTH — OLT & ONT Devices
+// =============================================================================
+
+model OltDevice {
+  id   Int    @id @default(autoincrement())
+  name String @db.VarChar(128)
+
+  ip_address     String  @unique @db.VarChar(15)
+  vendor         String  @db.VarChar(64)
+  model          String? @db.VarChar(64)
+  firmware       String? @db.VarChar(64)
+  snmp_community String? @db.VarChar(64)
+  snmp_version   String  @default("2c") @db.VarChar(4)
+  genieacs_id    String? @db.VarChar(128)
+
+  location    String?
+  total_ports Int     @default(0)
+  is_online   Boolean @default(true)
+  last_polled DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  ontDevices OntDevice[]
+
+  @@map("olt_devices")
+}
+
+model OntDevice {
+  id              String    @id @default(uuid()) @db.Uuid
+  olt_id          Int
+  subscription_id String?   @unique @db.Uuid
+
+  serial_number String @unique @db.VarChar(64)
+  mac_address   String @db.VarChar(17)
+
+  pon_port String? @db.VarChar(16)
+  onu_id   Int?
+
+  rx_power Decimal? @db.Decimal(6, 2)
+  tx_power Decimal? @db.Decimal(6, 2)
+
+  status      OntStatus @default(UNKNOWN)
+  model       String?   @db.VarChar(64)
+  firmware    String?   @db.VarChar(64)
+  genieacs_id String?   @db.VarChar(128)
+
+  last_seen  DateTime?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  olt          OltDevice     @relation(fields: [olt_id], references: [id])
+  subscription Subscription? @relation(fields: [subscription_id], references: [id])
+
+  @@index([olt_id])
+  @@index([status])
+  @@map("ont_devices")
+}
+
+// =============================================================================
+// MODULE: VPN — WireGuard Peer Management
+// =============================================================================
+
+model VpnPeer {
+  id            String        @id @default(uuid()) @db.Uuid
+  name          String        @db.VarChar(128)
+  public_key    String        @unique @db.VarChar(512)
+  preshared_key String?       @db.VarChar(512)
+  allowed_ips   String        @db.VarChar(128)
+  endpoint      String?       @db.VarChar(128)
+  status        VpnPeerStatus @default(ACTIVE)
+  notes         String?
+
+  // DEVICE | ADMIN | OFFICE
+  peer_type     String  @default("DEVICE") @db.VarChar(32)
+  olt_device_id Int?
+  created_by    String? @db.Uuid
+
+  last_handshake DateTime?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  @@index([status])
+  @@map("vpn_peers")
+}
+
+// =============================================================================
+// MODULE: NOTIFICATIONS
+// =============================================================================
+
+model Notification {
+  id      String              @id @default(uuid()) @db.Uuid
+  user_id String              @db.Uuid
+  channel NotificationChannel
+  status  NotificationStatus  @default(PENDING)
+
+  subject    String?  @db.VarChar(255)
+  body       String
+  to_address String?  @db.VarChar(255)
+  to_phone   String?  @db.VarChar(20)
+
+  entity_type String? @db.VarChar(64)
+  entity_id   String? @db.VarChar(128)
+
+  sent_at   DateTime?
+  read_at   DateTime?
+  error_msg String?
+
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([status])
+  @@index([created_at])
+  @@map("notifications")
+}
+
+model NotificationTemplate {
+  id       Int                 @id @default(autoincrement())
+  code     String              @unique @db.VarChar(64)
+  name     String              @db.VarChar(128)
+  channel  NotificationChannel
+  subject  String?             @db.VarChar(255)
+  body     String
+  is_active Boolean            @default(true)
+
+  @@map("notification_templates")
+}
+
+// =============================================================================
+// MODULE: FILES & ATTACHMENTS
+// =============================================================================
+
+model FileAttachment {
+  id           String @id @default(uuid()) @db.Uuid
+  filename     String @db.VarChar(255)
+  mimetype     String @db.VarChar(128)
+  size_bytes   BigInt
+  storage_path String
+
+  entity_type String? @db.VarChar(64)
+  entity_id   String? @db.VarChar(128)
+
+  uploaded_by String   @db.Uuid
+  created_at  DateTime @default(now())
+
+  @@index([entity_type, entity_id])
+  @@map("file_attachments")
+}
+
+// =============================================================================
+// INTERNAL: SYSTEM HEALTH
+// =============================================================================
+
+model CronJobLog {
+  id                BigInt   @id @default(autoincrement())
+  job_name          String   @db.VarChar(64)
+  status            String   @db.VarChar(16)
+  message           String?
+  records_processed Int      @default(0)
+  started_at        DateTime
+  ended_at          DateTime @default(now())
+
+  @@index([job_name])
+  @@index([started_at])
+  @@map("cron_job_logs")
+}

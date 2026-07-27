@@ -1,0 +1,25 @@
+model_list:
+  # Model Cloud Utama (Digunakan jika butuh reasoning tinggi)
+  - model_name: claude-3-opus
+    litellm_params:
+      model: anthropic/claude-3-opus-20240229
+      api_key: "os.environ/ANTHROPIC_API_KEY"
+
+  - model_name: gemini-1.5-pro
+    litellm_params:
+      model: gemini/gemini-1.5-pro
+      api_key: "os.environ/GEMINI_API_KEY"
+
+  # Model Lokal (GPT-OSS) - Tanpa Limit, Gratis
+  - model_name: gpt-oss-local
+    litellm_params:
+      model: openai/meta-llama/Meta-Llama-3-70B-Instruct # Nama model di vLLM
+      api_base: http://localhost:8000/v1
+      api_key: "sk-local-dummy-key" # vLLM tidak butuh API key asli
+
+router_settings:
+  # Konfigurasi Fallback Otomatis
+  # Jika claude-3-opus gagal/habis kuota, pindah ke gemini. Jika gemini habis, pindah ke lokal.
+  fallbacks: 
+    - {"claude-3-opus": ["gemini-1.5-pro", "gpt-oss-local"]}
+    - {"gemini-1.5-pro": ["gpt-oss-local"]}
