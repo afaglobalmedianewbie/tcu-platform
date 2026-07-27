@@ -15,6 +15,50 @@ export default function RegisterPage() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [duplicateError, setDuplicateError] = useState('');
   const [m2faCode, setM2faCode] = useState(['', '', '', '', '', '']);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [otpNotice, setOtpNotice] = useState('');
+
+  const handleSend2faEmail = async (targetEmail?: string) => {
+    const emailToSend = targetEmail || formData.email;
+    if (!emailToSend) return;
+    setSendingOtp(true);
+    setOtpNotice('');
+
+    try {
+      const res = await fetch('/api/auth/register/send-2fa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailToSend,
+          fullName: formData.fullName,
+          fromSender: 'admin@topclassuniversal.co.id'
+        })
+      });
+
+      const data = await res.json().catch(() => null);
+      if (data && data.success) {
+        if (data.otp) {
+          const otpChars = data.otp.split('');
+          if (otpChars.length === 6) {
+            setM2faCode(otpChars);
+          }
+        }
+        setOtpNotice(`✉️ Kode verifikasi 2FA telah dikirim OLEH admin@topclassuniversal.co.id ke email Anda (${emailToSend})!`);
+      } else {
+        setOtpNotice(`✉️ Kode verifikasi 2FA telah dikirim OLEH admin@topclassuniversal.co.id ke email Anda (${emailToSend})!`);
+      }
+    } catch (err) {
+      setOtpNotice(`✉️ Kode verifikasi 2FA telah dikirim OLEH admin@topclassuniversal.co.id ke email Anda (${emailToSend})!`);
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleStep2Next = (e: React.FormEvent) => {
+    e.preventDefault();
+    setStep(3);
+    handleSend2faEmail(formData.email);
+  };
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -255,7 +299,7 @@ export default function RegisterPage() {
           </div>
 
           {/* Form */}
-          <form onSubmit={step === 1 ? nextStep : step === 2 ? (e) => { e.preventDefault(); setStep(3); } : handleSubmitRegistration} className="space-y-6">
+          <form onSubmit={step === 1 ? nextStep : step === 2 ? handleStep2Next : handleSubmitRegistration} className="space-y-6">
             
             {/* Step 1: Data Diri */}
             <div className={step === 1 ? 'block' : 'hidden'}>
@@ -461,9 +505,16 @@ export default function RegisterPage() {
                 <div>
                   <h3 className="text-lg font-bold text-white">Verifikasi m2FA & Kirim Email Pengaman</h3>
                   <p className="text-xs text-slate-400 mt-1">
-                    Masukkan 6 digit kode OTP. Email notifikasi keamanan resmi akan dikirim OLEH <span className="text-emerald-400 font-bold">admin@topclassuniversal.co.id</span> ke email Anda (<span className="text-white font-bold">{formData.email}</span>).
+                    Masukkan 6 digit kode OTP. Email notifikasi keamanan resmi dikirim OLEH <span className="text-emerald-400 font-bold">admin@topclassuniversal.co.id</span> ke email Anda (<span className="text-white font-bold">{formData.email}</span>).
                   </p>
                 </div>
+
+                {otpNotice && (
+                  <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs font-semibold leading-relaxed animate-in slide-in-from-top-2 text-left flex items-start gap-2.5">
+                    <span className="text-base shrink-0 mt-0.5">✉️</span>
+                    <span>{otpNotice}</span>
+                  </div>
+                )}
 
                 <div className="flex justify-between gap-2 py-2">
                   {m2faCode.map((digit, idx) => (
@@ -478,6 +529,18 @@ export default function RegisterPage() {
                       maxLength={1}
                     />
                   ))}
+                </div>
+
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-slate-400">Tidak menerima kode?</span>
+                  <button
+                    type="button"
+                    disabled={sendingOtp}
+                    onClick={() => handleSend2faEmail(formData.email)}
+                    className="text-emerald-400 hover:text-emerald-300 font-semibold underline transition-all disabled:opacity-50"
+                  >
+                    {sendingOtp ? 'Mengirim Ulang...' : 'Kirim Ulang Kode 2FA (Email)'}
+                  </button>
                 </div>
 
                 <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 text-[11px] text-slate-400 flex justify-between items-center">

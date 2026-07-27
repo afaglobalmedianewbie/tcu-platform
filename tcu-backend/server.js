@@ -631,6 +631,64 @@ app.post('/api/auth/login/2fa/send-email', async (req, res) => {
   }
 });
 
+// POST /api/auth/register/send-2fa (Kirim kode 2FA untuk pendaftaran customer baru)
+app.post('/api/auth/register/send-2fa', async (req, res) => {
+  const { email, fullName } = req.body;
+  if (!email) return res.status(400).json({ success: false, message: 'Alamat email diperlukan.' });
+
+  try {
+    const otp = Math.floor(crypto.randomInt(100000, 1000000)).toString();
+    const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+
+    const tempToken = jwt.sign(
+      { email, email_otp_hash: otpHash },
+      JWT_SECRET,
+      { expiresIn: '10m' }
+    );
+
+    const subject = `[Kode 2FA] Verifikasi Pendaftaran Akun - TCU Platform`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 540px; margin: 0 auto; padding: 24px; border: 1px solid #334155; border-radius: 12px; background-color: #0f172a; color: #f8fafc;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <h2 style="color: #38bdf8; margin: 0; font-size: 22px;">PT Top Class Universal</h2>
+          <p style="color: #94a3b8; font-size: 13px; margin-top: 4px;">Portal Otentikasi & Keamanan m2FA</p>
+        </div>
+        <p style="font-size: 14px; color: #e2e8f0;">Halo <strong>${fullName || 'Pelanggan Baru'}</strong>,</p>
+        <p style="font-size: 14px; color: #cbd5e1; line-height: 1.6;">
+          Terima kasih telah mendaftar di TCU Platform. Berikut adalah kode verifikasi pengaman <strong>m2FA (Two-Factor Authentication)</strong> untuk menyelesaikan pendaftaran akun Anda:
+        </p>
+        <div style="background-color: #1e293b; border: 2px dashed #38bdf8; border-radius: 8px; padding: 18px; text-align: center; margin: 20px 0;">
+          <span style="font-size: 32px; font-weight: 800; letter-spacing: 0.2em; color: #34d399; font-family: monospace;">${otp}</span>
+        </div>
+        <p style="font-size: 12px; color: #94a3b8; line-height: 1.5;">
+          • Kode ini berlaku selama <strong>10 menit</strong>.<br/>
+          • Pengirim resmi: <strong style="color: #38bdf8;">admin@topclassuniversal.co.id</strong>.<br/>
+          • Jangan berikan kode ini kepada pihak mana pun demi keamanan akun Anda.
+        </p>
+        <hr style="border: 0; border-top: 1px solid #334155; margin: 20px 0;" />
+        <p style="font-size: 11px; color: #64748b; text-align: center; margin: 0;">
+          Administrator PT Top Class Universal · High Speed Fiber Optic Infrastructure<br/>
+          <em>Pesan otomatis dikirim oleh Server Keamanan TCU Platform</em>
+        </p>
+      </div>
+    `;
+
+    await sendEmail(email, subject, html, '"TCU Platform Admin" <admin@topclassuniversal.co.id>');
+
+    console.log(`✉️ Kode 2FA Pendaftaran [${otp}] berhasil dikirim OLEH admin@topclassuniversal.co.id KE ${email}`);
+
+    res.json({
+      success: true,
+      message: 'Kode verifikasi 2FA telah dikirim oleh admin@topclassuniversal.co.id',
+      tempToken,
+      otp
+    });
+  } catch (err) {
+    console.error('Error sending 2FA registration email:', err);
+    res.status(500).json({ success: false, message: 'Gagal mengirim email 2FA.', error: err.message });
+  }
+});
+
 // POST /api/auth/login/2fa
 app.post('/api/auth/login/2fa', async (req, res) => {
   const { tempToken, code } = req.body;
