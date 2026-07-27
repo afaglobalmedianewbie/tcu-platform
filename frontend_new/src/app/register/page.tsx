@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { User, Mail, Phone, Lock, Eye, EyeOff, CheckCircle2, MapPin, ShieldCheck, AlertCircle, ArrowRight } from 'lucide-react';
 
 export default function RegisterPage() {
@@ -184,12 +185,19 @@ export default function RegisterPage() {
         <div className="bg-[#1e293b]/80 backdrop-blur-xl border border-[#334155] rounded-3xl p-8 sm:p-10 shadow-2xl">
           {/* Header */}
           <div className="text-center mb-8">
-            <Link href="/" className="inline-block group mb-4">
-              <div className="w-16 h-16 mx-auto bg-gradient-to-tr from-violet-600 via-blue-600 to-emerald-400 rounded-2xl flex flex-col items-center justify-center text-white shadow-xl shadow-violet-500/20 group-hover:scale-105 transition-all border border-white/20 relative overflow-hidden">
-                <span className="text-xl font-black tracking-tighter leading-none font-['Outfit']">TCU</span>
-                <span className="text-[7px] uppercase tracking-widest text-emerald-200 font-extrabold mt-0.5">Fiber</span>
+            <Link href="/" className="inline-block group mb-3">
+              <div className="relative w-16 h-16 mx-auto rounded-2xl overflow-hidden border-2 border-blue-500/40 group-hover:border-blue-400 transition-all shadow-xl shadow-blue-500/20 group-hover:scale-105 bg-white">
+                <Image
+                  src="/logo-tcu.jpg"
+                  alt="PT Top Class Universal"
+                  fill
+                  className="object-cover"
+                  sizes="64px"
+                  priority
+                />
               </div>
             </Link>
+            <div className="text-[10px] font-black tracking-widest text-emerald-400 uppercase mb-2 font-['Outfit']">PT TOP CLASS UNIVERSAL</div>
             <h2 className="text-3xl font-['Outfit'] font-bold text-white tracking-tight flex items-center justify-center gap-2">
               Daftar Akun Baru
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400">

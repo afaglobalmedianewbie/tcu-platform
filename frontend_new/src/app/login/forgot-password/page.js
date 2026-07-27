@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Mail, Phone, AlertCircle, CheckCircle2, ArrowRight, UserPlus } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
@@ -80,8 +81,20 @@ export default function ForgotPasswordPage() {
 
       <div style={{ width: '100%', maxWidth: '440px', padding: '36px', background: '#1e293b/80', backdropFilter: 'blur(16px)', border: '1px solid #334155', borderRadius: '24px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', zIndex: 1 }}>
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <div style={{ width: '56px', height: '56px', background: 'linear-gradient(135deg, #7c3aed, #2563eb)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', fontWeight: 900, color: '#fff', margin: '0 auto 16px auto', boxShadow: '0 10px 25px rgba(124,58,237,0.3)' }}>
-            TCU
+          <Link href="/" style={{ display: 'inline-block', marginBottom: '12px' }}>
+            <div style={{ position: 'relative', width: '64px', height: '64px', margin: '0 auto', borderRadius: '16px', overflow: 'hidden', border: '2px solid rgba(59,130,246,0.4)', backgroundColor: '#ffffff', boxShadow: '0 10px 25px rgba(59,130,246,0.2)' }}>
+              <Image
+                src="/logo-tcu.jpg"
+                alt="PT Top Class Universal"
+                fill
+                style={{ objectFit: 'cover' }}
+                sizes="64px"
+                priority
+              />
+            </div>
+          </Link>
+          <div style={{ fontSize: '10px', fontWeight: 900, letterSpacing: '2px', color: '#34d399', textTransform: 'uppercase', marginBottom: '8px' }}>
+            PT TOP CLASS UNIVERSAL
           </div>
           <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#fff', marginBottom: '6px' }}>
             Pemulihan Kata Sandi

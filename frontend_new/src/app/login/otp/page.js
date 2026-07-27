@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function OtpPage() {
   const [otp, setOtp] = useState('');
@@ -37,9 +38,21 @@ export default function OtpPage() {
 
       <div className="glass-panel fade-in-up" style={{ width: '100%', maxWidth: '400px', padding: '40px', zIndex: 1 }}>
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <h1 style={{ fontSize: '2rem', fontWeight: 800, color: 'white', marginBottom: '8px' }}>
-            TCU<span style={{ color: 'var(--primary)' }}>ISP</span>
-          </h1>
+          <Link href="/" style={{ display: 'inline-block', marginBottom: '12px' }}>
+            <div style={{ position: 'relative', width: '64px', height: '64px', margin: '0 auto', borderRadius: '16px', overflow: 'hidden', border: '2px solid rgba(59,130,246,0.4)', backgroundColor: '#ffffff', boxShadow: '0 10px 25px rgba(59,130,246,0.2)' }}>
+              <Image
+                src="/logo-tcu.jpg"
+                alt="PT Top Class Universal"
+                fill
+                style={{ objectFit: 'cover' }}
+                sizes="64px"
+                priority
+              />
+            </div>
+          </Link>
+          <div style={{ fontSize: '10px', fontWeight: 900, letterSpacing: '2px', color: '#34d399', textTransform: 'uppercase', marginBottom: '8px' }}>
+            PT TOP CLASS UNIVERSAL
+          </div>
           <h2 style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '8px' }}>
             Verifikasi OTP
           </h2>

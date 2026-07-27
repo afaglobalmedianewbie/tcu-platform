@@ -3,6 +3,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function LoginPage() {
   return (
@@ -187,12 +188,19 @@ function LoginForm() {
       {/* Card */}
       <div className="relative z-10 w-full max-w-[420px] mx-4 p-7 sm:p-8 bg-[#1e293b]/80 backdrop-blur-lg border border-[#334155] rounded-2xl shadow-2xl">
         <div className="text-center mb-8">
-          <Link href="/" className="inline-block group mb-4">
-            <div className="w-16 h-16 mx-auto bg-gradient-to-tr from-violet-600 via-blue-600 to-emerald-400 rounded-2xl flex flex-col items-center justify-center text-white shadow-xl shadow-violet-500/20 group-hover:scale-105 transition-all border border-white/20 relative overflow-hidden">
-              <span className="text-xl font-black tracking-tighter leading-none font-['Outfit']">TCU</span>
-              <span className="text-[7px] uppercase tracking-widest text-emerald-200 font-extrabold mt-0.5">Fiber</span>
+          <Link href="/" className="inline-block group mb-3">
+            <div className="relative w-16 h-16 mx-auto rounded-2xl overflow-hidden border-2 border-blue-500/40 group-hover:border-blue-400 transition-all shadow-xl shadow-blue-500/20 group-hover:scale-105 bg-white">
+              <Image
+                src="/logo-tcu.jpg"
+                alt="PT Top Class Universal"
+                fill
+                className="object-cover"
+                sizes="64px"
+                priority
+              />
             </div>
           </Link>
+          <div className="text-[10px] font-black tracking-widest text-emerald-400 uppercase mb-2 font-['Outfit']">PT TOP CLASS UNIVERSAL</div>
           <h1 className="text-2xl font-black text-white font-['Outfit'] tracking-tight">Selamat Datang</h1>
           <p className="text-sm text-slate-400 mt-1">
             {isStaff ? 'Portal Karyawan & Admin PT Top Class Universal' : 'Portal Klien Top Class Universal'}
